@@ -19,6 +19,7 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
+          cache-dependency-path: WildlifeTracker/package-lock.json
         env:
           NODE_OPTIONS: --openssl-legacy-provider
 
@@ -29,15 +30,20 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: Install dependencies
-        run: npm ci
+        run: cd WildlifeTracker && npm ci
 
       - name: Build Android APK
-        run: eas build --platform android --profile production-apk --non-interactive
+        run: cd WildlifeTracker && eas build --platform android --profile production-apk --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Download APK
-        run: eas build:list --platform android --limit 1 --json > build-info.json
+        run: |
+          cd WildlifeTracker
+          eas build:list --platform android --limit 1 --json > build-info.json
+          BUILD_ID=$(jq -r '.[0].id' build-info.json)
+          echo "Downloading build: $BUILD_ID"
+          eas build:download $BUILD_ID
 
       - name: Upload APK to release
         uses: actions/upload-release-asset@v1
@@ -45,7 +51,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./build-*.apk
+          asset_path: WildlifeTracker/build-*.apk
           asset_name: GPSTracker-${{ github.ref_name }}.apk
           asset_content_type: application/vnd.android.package-archive
 
