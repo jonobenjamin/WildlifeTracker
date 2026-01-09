@@ -1,0 +1,18 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-74.006015, 40.712728]
+      },
+      "properties": {
+        "id": "point_1640995200000",
+        "timestamp": "2023-12-31T12:00:00.000Z",
+        "accuracy": 5.2,
+        "altitude": 10.5
+      }
+    }
+  ]
+}

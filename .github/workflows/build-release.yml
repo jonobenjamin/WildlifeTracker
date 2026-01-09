@@ -1,0 +1,88 @@
+name: Build and Release App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+        env:
+          NODE_OPTIONS: --openssl-legacy-provider
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          expo-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Android APK
+        run: eas build --platform android --profile production-apk --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Download APK
+        run: eas build:list --platform android --limit 1 --json > build-info.json
+
+      - name: Upload APK to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./build-*.apk
+          asset_name: WildlifeTracker-${{ github.ref_name }}.apk
+          asset_content_type: application/vnd.android.package-archive
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: |
+            ## Wildlife Tracker ${{ github.ref_name }}
+
+            Download the latest version of the Wildlife Tracker app.
+
+            ### Downloads
+            - 📱 **Android APK**: Download `WildlifeTracker-${{ github.ref_name }}.apk`
+
+            ### Installation Instructions
+
+            **Android:**
+            1. Download the APK file
+            2. Enable "Install unknown apps" in your device settings
+            3. Open the downloaded APK file
+            4. Follow the installation prompts
+
+            ### Features
+            - Capture GPS-tagged wildlife observations
+            - Works online and offline
+            - Sync data to GitHub repository
+            - Pre-loaded species database
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}

@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "GPS Tracker",
+    "slug": "gps-tracker",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "bundleIdentifier": "com.gpstracker.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "This app captures GPS coordinates for location tracking."
+      }
+    },
+    "android": {
+      "package": "com.gpstracker.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "INTERNET"
+      ]
+    }
+  }
+}
