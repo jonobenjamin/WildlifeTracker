@@ -9,6 +9,8 @@ A simple mobile app that captures GPS locations and saves them as GeoJSON files 
 ### Direct Download Links
 - 📱 **Android APK**: Available in [Releases](https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest)
 
+**Note:** Replace `YOUR_USERNAME/YOUR_REPO` with your actual GitHub repository name
+
 ## Features
 
 - **GPS Capture**: Capture precise GPS coordinates with accuracy
