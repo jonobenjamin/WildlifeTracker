@@ -23,8 +23,8 @@ jobs:
         env:
           NODE_OPTIONS: --openssl-legacy-provider
 
-      - name: Install Expo CLI
-        run: npm install -g @expo/cli
+      - name: Install Expo CLI and EAS
+        run: npm install -g @expo/cli @expo/eas-cli
 
       - name: Install dependencies
         run: cd WildlifeTracker && npm ci
