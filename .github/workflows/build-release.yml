@@ -17,11 +17,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
           cache-dependency-path: WildlifeTracker/package-lock.json
-        env:
-          NODE_OPTIONS: --openssl-legacy-provider
 
       - name: Install Expo CLI and EAS
         run: npm install -g @expo/cli eas-cli
