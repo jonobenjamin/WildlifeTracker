@@ -27,8 +27,8 @@ jobs:
       - name: Install dependencies
         run: cd WildlifeTracker && npm ci
 
-      - name: Publish to Expo (required for EAS)
-        run: cd WildlifeTracker && npx expo-cli publish --clear-cache
+      - name: Update Expo app (required for EAS)
+        run: cd WildlifeTracker && npx eas-cli update --auto
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
