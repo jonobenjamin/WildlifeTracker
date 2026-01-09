@@ -4,12 +4,10 @@ A simple mobile app that captures GPS locations and saves them as GeoJSON files 
 
 ## 📱 Download Links
 
-**Latest Release:** [GitHub Releases](https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest)
+**Latest Release:** [GitHub Releases](https://github.com/jonobenjamin/WildlifeTracker/releases/latest)
 
 ### Direct Download Links
-- 📱 **Android APK**: Available in [Releases](https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest)
-
-**Note:** Replace `YOUR_USERNAME/YOUR_REPO` with your actual GitHub repository name
+- 📱 **Android APK**: Available in [Releases](https://github.com/jonobenjamin/WildlifeTracker/releases/latest)
 
 ## Features
 
