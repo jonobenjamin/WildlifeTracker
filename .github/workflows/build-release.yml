@@ -29,6 +29,11 @@ jobs:
       - name: Install dependencies
         run: cd WildlifeTracker && npm ci
 
+      - name: Configure EAS project
+        run: |
+          cd WildlifeTracker
+          echo '{"cli": {"version": ">= 5.9.0"}, "build": {"production-apk": {"android": {"buildType": "apk"}}}, "submit": {"production": {}}}' > eas.json
+
       - name: Build Android APK
         run: cd WildlifeTracker && npx eas-cli build --platform android --profile production-apk --non-interactive
         env:
