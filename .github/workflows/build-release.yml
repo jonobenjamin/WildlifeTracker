@@ -29,14 +29,6 @@ jobs:
       - name: Install dependencies
         run: cd WildlifeTracker && npm ci
 
-      - name: Authenticate with Expo
-        run: cd WildlifeTracker && npx eas-cli login --access-token ${{ secrets.EXPO_TOKEN }}
-
-      - name: Initialize EAS project
-        run: cd WildlifeTracker && npx eas-cli init --yes
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-
       - name: Build Android APK
         run: cd WildlifeTracker && npx eas-cli build --platform android --profile production-apk --non-interactive
         env:
