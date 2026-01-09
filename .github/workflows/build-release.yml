@@ -27,26 +27,28 @@ jobs:
       - name: Install dependencies
         run: cd WildlifeTracker && npm ci
 
-      - name: Build Android APK with Expo CLI
-        run: cd WildlifeTracker && npx expo-cli build:android --type apk --no-publish --no-dev --clear-cache
+      - name: Publish to Expo (required for EAS)
+        run: cd WildlifeTracker && npx expo-cli publish --clear-cache
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Configure EAS project
+        run: cd WildlifeTracker && npx eas-cli build:configure
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android APK with EAS
+        run: cd WildlifeTracker && npx eas-cli build --platform android --profile production-apk --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Download APK
         run: |
           cd WildlifeTracker
-          # Classic Expo build downloads APK directly to current directory
-          ls -la *.apk || echo "Looking for APK file..."
-          # Find the APK file (classic expo build creates it in the project directory)
-          APK_FILE=$(find . -name "*.apk" -type f | head -1)
-          if [ -f "$APK_FILE" ]; then
-            echo "Found APK: $APK_FILE"
-            mv "$APK_FILE" build-output.apk
-          else
-            echo "APK not found, checking expo build output..."
-            # If no APK found, the build might have failed or needs different handling
-            ls -la
-          fi
+          npx eas-cli build:list --platform android --limit 1 --json > build-info.json
+          BUILD_ID=$(jq -r '.[0].id' build-info.json)
+          echo "Downloading build: $BUILD_ID"
+          npx eas-cli build:download $BUILD_ID
 
       - name: Upload APK to release
         uses: actions/upload-release-asset@v1
@@ -54,7 +56,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: WildlifeTracker/build-output.apk
+          asset_path: WildlifeTracker/build-*.apk
           asset_name: GPSTracker-${{ github.ref_name }}.apk
           asset_content_type: application/vnd.android.package-archive
 
