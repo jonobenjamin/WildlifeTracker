@@ -1,0 +1,92 @@
+name: Build and Release App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: WildlifeTracker/package-lock.json
+
+      - name: Install Expo CLI and EAS
+        run: npm install -g @expo/cli eas-cli
+
+      - name: Install dependencies
+        run: cd WildlifeTracker && npm ci
+
+      - name: Build Android APK with EAS
+        run: |
+          cd WildlifeTracker
+          # Try direct EAS build - it should auto-configure if needed
+          npx eas-cli build --platform android --profile production-apk --non-interactive --auto-submit=false
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Download APK
+        run: |
+          cd WildlifeTracker
+          npx eas-cli build:list --platform android --limit 1 --json > build-info.json
+          BUILD_ID=$(jq -r '.[0].id' build-info.json)
+          echo "Downloading build: $BUILD_ID"
+          npx eas-cli build:download $BUILD_ID
+
+      - name: Upload APK to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: WildlifeTracker/build-*.apk
+          asset_name: GPSTracker-${{ github.ref_name }}.apk
+          asset_content_type: application/vnd.android.package-archive
+
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: |
+            ## GPS Tracker ${{ github.ref_name }}
+
+            Download the latest version of the GPS Tracker app.
+
+            ### Downloads
+            - 📱 **Android APK**: Download `GPSTracker-${{ github.ref_name }}.apk`
+
+            ### Installation Instructions
+
+            **Android:**
+            1. Download the APK file
+            2. Enable "Install unknown apps" in your device settings
+            3. Open the downloaded APK file
+            4. Follow the installation prompts
+
+            ### Features
+            - Capture GPS locations with accuracy
+            - Creates GeoJSON files automatically
+            - Uploads data directly to GitHub
+            - Simple one-screen interface
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}

@@ -1,62 +1,50 @@
-# GPS Field Tracker - Cordova APK
+# GPS Field Tracker
 
-A downloadable mobile app built with Apache Cordova that captures GPS locations and saves JSON data to GitHub.
+A Progressive Web App (PWA) that captures GPS locations and saves observation data as JSON files to GitHub. Can be installed as a mobile app on phones and tablets.
 
 ## Features
 
-- 📱 **Native Mobile App** - Real APK that installs on Android phones
-- 📍 **GPS Location Capture** - High accuracy coordinates
-- 💾 **JSON Data Storage** - Saves to GitHub as JSON files
-- 🔄 **Multi-User Support** - Different repositories per user
-- 📶 **Offline Capable** - Works without internet after initial load
+- 📍 **GPS Location Capture** - High accuracy coordinates with accuracy indicator
+- 💾 **JSON Data Storage** - Saves structured observation data to GitHub
+- 📱 **Mobile App** - Installable PWA that works like a native app
+- 🔄 **Offline Capable** - Service worker for offline functionality
+- 🌐 **Cross-Platform** - Works on any device with a modern browser
+- 👥 **Multi-User Support** - Different users can save to different repositories
 
-## Building the APK
+## Quick Start
 
-### Prerequisites
+### 1. Host on GitHub Pages
 
-1. **Node.js** (v14 or higher)
-2. **Android Studio** with Android SDK
-3. **Java JDK** (v8 or higher)
+1. Upload all files to a GitHub repository
+2. Go to Repository Settings → Pages
+3. Set source to "main" branch and "/root" folder
+4. Your app will be available at: `https://yourusername.github.io/repository-name`
 
-### Build Steps
+### 2. Install as Mobile App
 
-```bash
-# Install dependencies
-npm install
+**On Android/iOS:**
+1. Open the GitHub Pages URL in your browser
+2. Tap "Add to Home Screen" or "Install App"
+3. The app will install like a native mobile app
 
-# Add Android platform (if not already added)
-npx cordova platform add android
+### 3. Configure GitHub Access
 
-# Build APK
-./build-apk.sh
-```
-
-The APK will be created at: `platforms/android/app/build/outputs/apk/release/app-release.apk`
-
-## Installation
-
-1. **Transfer APK to Android device**
-2. **Enable "Install unknown apps"** in Android settings
-3. **Open the APK file** to install
-4. **Launch the app** from your app drawer
-
-## Configuration
-
-### GitHub Setup
-
-1. **Create Personal Access Token:**
+1. Create a Personal Access Token:
    - GitHub → Settings → Developer settings → Personal access tokens
-   - Generate token with `repo` permissions
+   - Give it `repo` permissions
 
-2. **Configure in App:**
-   - Open the installed app
-   - Tap ⚙️ Settings
-   - Enter GitHub token and repository name
-   - Choose data folder (default: `data`)
+2. In the app, tap Settings and enter:
+   - Your GitHub token
+   - Repository name (format: `username/repository-name`)
+   - Data folder (where to save JSON files)
 
-## Data Format
+## How It Works
 
-Each observation saves as JSON:
+1. **Capture GPS**: Tap "Capture GPS Location" to get your current position
+2. **Review Data**: Check the accuracy and location details
+3. **Save & Upload**: Tap "Save & Upload to GitHub" to store the observation
+
+Each observation creates a JSON file like this:
 
 ```json
 {
@@ -66,81 +54,107 @@ Each observation saves as JSON:
     "latitude": 40.712728,
     "longitude": -74.006015,
     "accuracy": 5.2,
-    "altitude": 10.5
+    "altitude": 10.5,
+    "speed": null,
+    "heading": null
   },
   "device": {
-    "userAgent": "Cordova Android App",
-    "platform": "Android"
+    "userAgent": "Mozilla/5.0...",
+    "platform": "MacIntel"
   }
 }
 ```
 
-## Distribution
+## Data Storage
 
-- **Upload APK to GitHub Releases** for easy downloading
-- **Share APK file directly** with users
-- **No app store required** - direct installation
+- **Repository Structure**: Files are saved to your chosen folder (default: `data/`)
+- **File Naming**: `observation_{id}.json`
+- **Multi-User**: Different users can configure different repositories
+- **Future Migration**: Easy to move to Firebase or other databases later
+
+## Browser Support
+
+Works on all modern browsers with GPS support:
+- ✅ Chrome/Chromium (Android, Desktop)
+- ✅ Safari (iOS, macOS)
+- ✅ Firefox (Android, Desktop)
+- ✅ Edge (Windows, Android)
+
+## Offline Usage
+
+The app works offline after the initial load:
+- GPS capture works without internet
+- Data is stored locally until upload
+- Service worker caches the app for offline use
 
 ## Development
 
-### Project Structure
-
-```
-GPSFieldApp/
-├── config.xml          # Cordova configuration
-├── www/               # Web assets
-│   ├── index.html     # Main app
-│   ├── manifest.json  # PWA manifest
-│   └── sw.js         # Service worker
-├── platforms/         # Platform-specific code
-├── plugins/          # Cordova plugins
-└── build-apk.sh      # Build script
-```
-
-### Modifying the App
-
-Edit files in the `www/` folder:
-- `index.html` - Main UI and logic
-- `manifest.json` - App metadata
-- `sw.js` - Offline functionality
-
-### Adding Plugins
+### Local Testing
 
 ```bash
-npx cordova plugin add cordova-plugin-geolocation
+# Start a local server
+python -m http.server 8000
+# Or use any local server
+
+# Open http://localhost:8000 in your browser
 ```
 
-## Permissions
+### Customization
 
-The app requests:
-- **Location access** for GPS coordinates
-- **Internet access** for GitHub uploads
+Edit `index.html` to modify:
+- UI styling and colors
+- Data fields captured
+- GitHub integration settings
+- Accuracy requirements
+
+## Deployment Options
+
+### Option 1: GitHub Pages (Free)
+- Host directly on GitHub
+- Automatic HTTPS
+- Custom domain support
+
+### Option 2: Netlify/Vercel (Free tier)
+- Drag & drop deployment
+- Better performance
+- Custom domains included
+
+### Option 3: Your Own Server
+- Full control
+- Custom backend integration
+- Database integration ready
+
+## Privacy & Security
+
+- GitHub token stored locally in browser
+- No data sent to third parties
+- GPS data only used for observations
+- Location permissions required for functionality
+
+## Future Enhancements
+
+- 📊 Data visualization dashboard
+- 📷 Photo attachments
+- 🗺️ Map integration
+- 👥 Team collaboration features
+- 🔄 Firebase migration support
 
 ## Troubleshooting
 
-### Build Issues
-
-```bash
-# Check requirements
-npx cordova requirements android
-
-# Clean and rebuild
-npx cordova clean android
-npx cordova build android
-```
-
 ### GPS Not Working
+- Ensure location permissions are granted
+- Try refreshing the page
+- Check if GPS is enabled on device
 
-- Grant location permissions when prompted
-- Try restarting the app
-- Check Android location settings
-
-### Upload Issues
-
-- Verify GitHub token has `repo` scope
+### Upload Failing
+- Verify GitHub token has `repo` permissions
 - Check repository name format
-- Ensure write access to repository
+- Ensure you have write access
+
+### App Not Installing
+- Use Chrome on Android for best PWA support
+- Ensure you're on HTTPS (required for PWAs)
 
 ## License
 
-Open source - modify and distribute freely.
+Open source - modify and distribute as needed.

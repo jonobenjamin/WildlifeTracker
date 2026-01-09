@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1976d2">
+    <title>GPS Field Tracker</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .status {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+            min-height: 20px;
+        }
+        .location-info {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            display: none;
+        }
+        .btn {
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            text-align: center;
+            text-decoration: none;
+            display: block;
+            font-size: 18px;
+            margin: 10px 0;
+            cursor: pointer;
+            border-radius: 25px;
+            width: 100%;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-primary {
+            background: linear-gradient(45deg, #2196F3, #21CBF3);
+        }
+        .btn-success {
+            background: linear-gradient(45deg, #4CAF50, #81C784);
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+        }
+        .settings-panel {
+            display: none;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+        }
+        .accuracy-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-left: 10px;
+        }
+        .accuracy-good { background-color: #4CAF50; }
+        .accuracy-fair { background-color: #FF9800; }
+        .accuracy-poor { background-color: #F44336; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📍 GPS Field Tracker</h1>
+
+        <div id="status" class="status">Initializing...</div>
+
+        <button id="gpsBtn" class="btn btn-primary" onclick="captureGPS()">
+            🎯 Capture GPS Location
+        </button>
+
+        <div id="locationInfo" class="location-info">
+            <h3>📍 Current Location</h3>
+            <p><strong>Latitude:</strong> <span id="lat"></span></p>
+            <p><strong>Longitude:</strong> <span id="lng"></span></p>
+            <p><strong>Accuracy:</strong> <span id="accuracy"></span> <span id="accuracyIndicator" class="accuracy-indicator"></span></p>
+            <p><strong>Altitude:</strong> <span id="altitude"></span></p>
+            <p><strong>Timestamp:</strong> <span id="timestamp"></span></p>
+        </div>
+
+        <button id="saveBtn" class="btn btn-success" onclick="saveAndUpload()" disabled>
+            💾 Save & Upload to GitHub
+        </button>
+
+        <button id="settingsBtn" class="btn" onclick="toggleSettings()" style="background: rgba(255,255,255,0.2);">
+            ⚙️ Settings
+        </button>
+
+        <div id="settingsPanel" class="settings-panel">
+            <h3>GitHub Configuration</h3>
+            <input type="password" id="githubToken" placeholder="GitHub Personal Access Token" />
+            <input type="text" id="githubRepo" placeholder="Repository (username/repo)" />
+            <select id="dataFolder">
+                <option value="data">data</option>
+                <option value="observations">observations</option>
+                <option value="gps-data">gps-data</option>
+            </select>
+            <button class="btn" onclick="saveSettings()" style="background: rgba(255,255,255,0.3); margin-top: 10px;">
+                Save Settings
+            </button>
+            <p style="font-size: 12px; margin-top: 10px; opacity: 0.8;">
+                Create token at: GitHub → Settings → Developer settings → Personal access tokens
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let currentPosition = null;
+        let settings = {
+            token: localStorage.getItem('github_token') || '',
+            repo: localStorage.getItem('github_repo') || '',
+            folder: localStorage.getItem('data_folder') || 'data'
+        };
+
+        // Initialize
+        window.onload = function() {
+            updateStatus('Ready to capture GPS location');
+            loadSettings();
+            checkGeolocationSupport();
+        };
+
+        function checkGeolocationSupport() {
+            if (!navigator.geolocation) {
+                updateStatus('❌ Geolocation is not supported by this browser');
+            }
+        }
+
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        function captureGPS() {
+            updateStatus('📡 Getting GPS location...');
+            document.getElementById('gpsBtn').disabled = true;
+
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 300000
+            };
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    currentPosition = position;
+                    displayLocation(position);
+                    updateStatus('✅ GPS location captured successfully!');
+                    document.getElementById('saveBtn').disabled = false;
+                    document.getElementById('gpsBtn').disabled = false;
+                },
+                (error) => {
+                    let errorMessage = '❌ GPS Error: ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage += 'Location access denied by user.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage += 'Location information unavailable.';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage += 'Location request timed out.';
+                            break;
+                        default:
+                            errorMessage += 'Unknown error occurred.';
+                            break;
+                    }
+                    updateStatus(errorMessage);
+                    document.getElementById('gpsBtn').disabled = false;
+                },
+                options
+            );
+        }
+
+        function displayLocation(position) {
+            const coords = position.coords;
+            const timestamp = new Date(position.timestamp);
+
+            document.getElementById('lat').textContent = coords.latitude.toFixed(6);
+            document.getElementById('lng').textContent = coords.longitude.toFixed(6);
+            document.getElementById('accuracy').textContent = coords.accuracy.toFixed(1) + ' meters';
+            document.getElementById('altitude').textContent = coords.altitude ? coords.altitude.toFixed(1) + ' meters' : 'N/A';
+            document.getElementById('timestamp').textContent = timestamp.toLocaleString();
+
+            // Accuracy indicator
+            const indicator = document.getElementById('accuracyIndicator');
+            indicator.className = 'accuracy-indicator';
+            if (coords.accuracy <= 10) {
+                indicator.classList.add('accuracy-good');
+            } else if (coords.accuracy <= 50) {
+                indicator.classList.add('accuracy-fair');
+            } else {
+                indicator.classList.add('accuracy-poor');
+            }
+
+            document.getElementById('locationInfo').style.display = 'block';
+        }
+
+        function saveAndUpload() {
+            if (!currentPosition) {
+                updateStatus('❌ No location data to save');
+                return;
+            }
+
+            if (!settings.token || !settings.repo) {
+                updateStatus('❌ Please configure GitHub settings first');
+                return;
+            }
+
+            updateStatus('💾 Creating observation data...');
+
+            const observation = {
+                id: 'obs_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                timestamp: new Date().toISOString(),
+                location: {
+                    latitude: currentPosition.coords.latitude,
+                    longitude: currentPosition.coords.longitude,
+                    accuracy: currentPosition.coords.accuracy,
+                    altitude: currentPosition.coords.altitude,
+                    speed: currentPosition.coords.speed,
+                    heading: currentPosition.coords.heading
+                },
+                device: {
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform
+                }
+            };
+
+            uploadToGitHub(observation);
+        }
+
+        async function uploadToGitHub(observation) {
+            const filename = `observation_${observation.id}.json`;
+            const filepath = `${settings.folder}/${filename}`;
+
+            try {
+                updateStatus('☁️ Uploading to GitHub...');
+
+                const response = await fetch(`https://api.github.com/repos/${settings.repo}/contents/${filepath}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${settings.token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: `Add GPS observation: ${observation.id}`,
+                        content: btoa(JSON.stringify(observation, null, 2)),
+                    })
+                });
+
+                if (response.ok) {
+                    updateStatus('✅ Successfully uploaded to GitHub!');
+                    // Reset for next observation
+                    setTimeout(() => {
+                        updateStatus('Ready for next observation');
+                    }, 3000);
+                } else {
+                    const error = await response.json();
+                    throw new Error(`GitHub API error: ${error.message}`);
+                }
+
+            } catch (error) {
+                updateStatus('❌ Upload failed: ' + error.message);
+                console.error('Upload error:', error);
+            }
+        }
+
+        function toggleSettings() {
+            const panel = document.getElementById('settingsPanel');
+            panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function loadSettings() {
+            document.getElementById('githubToken').value = settings.token;
+            document.getElementById('githubRepo').value = settings.repo;
+            document.getElementById('dataFolder').value = settings.folder;
+        }
+
+        function saveSettings() {
+            settings.token = document.getElementById('githubToken').value;
+            settings.repo = document.getElementById('githubRepo').value;
+            settings.folder = document.getElementById('dataFolder').value;
+
+            localStorage.setItem('github_token', settings.token);
+            localStorage.setItem('github_repo', settings.repo);
+            localStorage.setItem('data_folder', settings.folder);
+
+            updateStatus('⚙️ Settings saved!');
+            toggleSettings();
+
+            setTimeout(() => {
+                updateStatus('Ready to capture GPS location');
+            }, 2000);
+        }
+
+        // Register service worker for offline functionality
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(registration => console.log('SW registered'))
+                    .catch(error => console.log('SW registration failed'));
+            });
+        }
+    </script>
+</body>
+</html>
