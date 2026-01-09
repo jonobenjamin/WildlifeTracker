@@ -24,6 +24,11 @@
         "ACCESS_COARSE_LOCATION",
         "INTERNET"
       ]
+    },
+    "extra": {
+      "eas": {
+        "projectId": "gps-tracker-project"
+      }
     }
   }
 }

@@ -27,20 +27,11 @@ jobs:
       - name: Install dependencies
         run: cd WildlifeTracker && npm ci
 
-      - name: Create EAS project and configure
+      - name: Build Android APK with EAS
         run: |
           cd WildlifeTracker
-          # Create basic expo app structure
-          echo '{"name": "gps-tracker", "slug": "gps-tracker", "version": "1.0.0", "orientation": "portrait", "icon": "./assets/icon.png", "userInterfaceStyle": "light", "splash": {"image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#ffffff"}, "ios": {"bundleIdentifier": "com.gpstracker.app"}, "android": {"package": "com.gpstracker.app"}, "web": {"favicon": "./assets/favicon.png"}}' > app.json
-          # Try to create EAS project
-          npx eas-cli init --yes 2>/dev/null || echo "EAS init failed, continuing..."
-          # Create basic eas.json if it doesn't exist
-          if [ ! -f eas.json ]; then
-            echo '{"cli": {"version": ">= 5.9.0"}, "build": {"production-apk": {"android": {"buildType": "apk"}}}, "submit": {"production": {}}}' > eas.json
-          fi
-
-      - name: Build Android APK with EAS
-        run: cd WildlifeTracker && npx eas-cli build --platform android --profile production-apk --non-interactive
+          # Try direct EAS build - it should auto-configure if needed
+          npx eas-cli build --platform android --profile production-apk --non-interactive --auto-submit=false
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
