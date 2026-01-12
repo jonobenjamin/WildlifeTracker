@@ -59,5 +59,5 @@ echo ""
 
 echo "✅ READY TO DISTRIBUTE!"
 echo "======================"
-echo "Send your field teams the APK download link above."
+echo "Send your field teams the web app link above."
 echo "They can install and start collecting GPS data immediately!"
