@@ -1,0 +1,23 @@
+# GPS Field Tracker - Download Links
+# Share these links with your field teams
+
+## Direct APK Download (Recommended)
+https://github.com/jonobenjamin/WildlifeTracker/releases/latest/download/GPS-Field-Tracker-v3.0.0.apk
+
+## Professional Download Page
+https://jonobenjamin.github.io/WildlifeTracker/download.html
+
+## GitHub Repository
+https://github.com/jonobenjamin/WildlifeTracker
+
+## Instructions for Teams:
+1. Click the APK download link above
+2. Install on Android phone (enable "Install unknown apps" if needed)
+3. Open app and configure GitHub settings
+4. Start collecting GPS data!
+
+## For iOS Users:
+Currently Android only. iOS version coming soon.
+
+## Need Help?
+Contact: GPS Field Tracker Support
