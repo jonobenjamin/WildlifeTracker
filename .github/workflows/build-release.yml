@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-android:
-    name: Build Android APK
+  build-and-release:
+    name: Build APK and Create Release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -29,31 +29,22 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Cordova
-        run: npm install -g cordova
+      - name: Install dependencies
+        run: cd WildlifeTracker && npm ci
 
-      - name: Add Android Platform
-        run: cordova platform add android
-
-      - name: Build Android APK
-        run: cordova build android --release
-
-      - name: Upload APK to release
-        uses: actions/upload-release-asset@v1
+      - name: Build Android APK with EAS
+        run: cd WildlifeTracker && npx eas build --platform android --profile apk --non-interactive
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: platforms/android/app/build/outputs/apk/release/app-release.apk
-          asset_name: GPS-Field-Tracker-${{ github.ref_name }}.apk
-          asset_content_type: application/vnd.android.package-archive
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-  create-release:
-    name: Create Release
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-    steps:
+      - name: Download APK
+        run: |
+          cd WildlifeTracker
+          npx eas build:list --platform android --limit 1 --json > build-info.json
+          BUILD_ID=$(jq -r '.[0].id' build-info.json)
+          echo "Downloading build: $BUILD_ID"
+          npx eas build:download $BUILD_ID
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -65,7 +56,7 @@ jobs:
           body: |
             ## GPS Field Tracker ${{ github.ref_name }}
 
-            Download the GPS Field Tracker - a native Android app for capturing GPS locations.
+            Download the GPS Field Tracker - a native Android app for GPS data collection.
 
             ### Downloads
             - 📱 **Android APK**: Download `GPS-Field-Tracker-${{ github.ref_name }}.apk`
@@ -73,16 +64,26 @@ jobs:
             ### Installation Instructions
 
             **Android:**
-            1. Download the APK file
-            2. Enable "Install unknown apps" in your device settings
+            1. Download the APK file below
+            2. Enable "Install unknown apps" in Android settings
             3. Open the APK file to install
             4. Grant location permissions when prompted
 
             ### Features
-            - 📍 Native GPS location capture with high accuracy
-            - 💾 Saves observation data as JSON files to GitHub
-            - 👥 Multi-user support (different repositories per user)
-            - 📶 Works offline after initial setup
-            - 🎯 Installs as a real mobile app on your phone
+            - 📍 High-accuracy GPS location capture
+            - 💾 Saves data as JSON files to GitHub
+            - 👥 Multi-user support for different teams
+            - 📶 Works offline after setup
+            - 🎯 Real mobile app experience
           draft: false
           prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}
+
+      - name: Upload APK to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: WildlifeTracker/build-*.apk
+          asset_name: GPS-Field-Tracker-${{ github.ref_name }}.apk
+          asset_content_type: application/vnd.android.package-archive
