@@ -1,6 +1,20 @@
 # GPS Field Tracker
 
-A Progressive Web App (PWA) that captures GPS locations and saves observation data as JSON files to GitHub. Can be installed as a mobile app on phones and tablets.
+A Progressive Web App (PWA) that captures GPS locations and saves observation data as JSON files to GitHub. Installs as a native mobile app on phones and tablets.
+
+## 📱 Install Now
+
+**🌐 Open the App:**
+```
+https://jonobenjamin.github.io/WildlifeTracker/
+```
+
+**📱 Professional Installation Page:**
+```
+https://jonobenjamin.github.io/WildlifeTracker/download.html
+```
+
+**Installation:** Open on phone → Tap "Add to Home Screen" → Installs like a native app!
 
 ## Features
 

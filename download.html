@@ -133,9 +133,18 @@
             <h2>🚀 Download & Install</h2>
             <p>Click below to download the latest version</p>
 
-            <a href="https://github.com/jonobenjamin/WildlifeTracker/releases/latest/download/GPS-Field-Tracker-v3.0.0.apk"
-               class="btn btn-large android-only">
-                📥 Download for Android (APK)
+            <button onclick="installPWA()" class="btn btn-large android-only">
+                📱 Install GPS Field Tracker
+            </button>
+
+            <p style="margin-top: 15px; font-size: 14px;">
+                <strong>📱 Mobile Installation:</strong><br>
+                Open this page on your phone → Tap "Install App" or "Add to Home Screen"
+            </p>
+
+            <a href="https://jonobenjamin.github.io/WildlifeTracker/"
+               class="btn android-only" style="background: rgba(255,255,255,0.2);">
+                🌐 Open Web App
             </a>
 
             <p style="margin-top: 20px; font-size: 16px;">
@@ -197,10 +206,50 @@
     </div>
 
     <script>
-        // Auto-redirect Android users to direct APK download
-        function detectAndroid() {
+        let deferredPrompt;
+
+        // PWA Install prompt
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+
+            // Show install button
+            const installBtn = document.querySelector('.android-only');
+            if (installBtn && !installBtn.href) {
+                installBtn.style.display = 'inline-block';
+            }
+        });
+
+        // App installed
+        window.addEventListener('appinstalled', (evt) => {
+            console.log('App installed successfully');
+        });
+
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('User accepted the install prompt');
+                    }
+                    deferredPrompt = null;
+                });
+            } else {
+                // Fallback - redirect to web app
+                window.open('https://jonobenjamin.github.io/WildlifeTracker/', '_blank');
+                alert('To install: Open the app link, then tap "Add to Home Screen" or "Install App"');
+            }
+        }
+
+        function detectMobile() {
             const userAgent = navigator.userAgent.toLowerCase();
-            return userAgent.indexOf("android") > -1;
+            return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+        }
+
+        // Auto-redirect mobile users to web app
+        if (detectMobile()) {
+            // Show mobile-specific instructions
+            document.querySelector('.android-only').style.display = 'inline-block';
         }
 
         // Analytics (optional)
