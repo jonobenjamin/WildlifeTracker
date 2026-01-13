@@ -1,0 +1,6 @@
+{
+  "version": "1.0.0",
+  "mandatory": false,
+  "apk_url": "https://yourdomain.com/wildlife-tracker_v1.0.0.apk",
+  "notes": "Initial release with offline wildlife tracking"
+}

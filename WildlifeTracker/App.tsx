@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
-import { View, Text, Alert } from 'react-native';
+import { View, Text, Alert, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
+import * as FileSystem from 'expo-file-system';
+import * as IntentLauncher from 'expo-intent-launcher';
 
 // Import screens (we'll create these)
 import LoginScreen from './src/screens/LoginScreen';
@@ -54,6 +56,8 @@ export default function App() {
 
   const checkForUpdates = async () => {
     try {
+      // For development, you can host this on your website
+      // For now, it will fail gracefully if not available
       const response = await fetch('https://yourdomain.com/latest.json');
       const latestInfo = await response.json();
 
@@ -86,11 +90,34 @@ export default function App() {
 
   const downloadAndInstallUpdate = async (updateInfo: any) => {
     try {
-      // For APK updates, we'll need to implement download and install
-      // This is platform-specific and would require additional setup
-      Alert.alert('Update', 'Update functionality will be implemented with APK download');
+      // Download APK file
+      const apkUri = FileSystem.documentDirectory + 'update.apk';
+
+      const downloadResult = await FileSystem.downloadAsync(
+        updateInfo.apk_url,
+        apkUri
+      );
+
+      if (downloadResult.status !== 200) {
+        throw new Error('Download failed');
+      }
+
+      // Install APK (Android only)
+      if (Platform.OS === 'android') {
+        const permissions = await FileSystem.getInfoAsync(apkUri);
+        if (permissions.exists) {
+          // Request install permission and install
+          await IntentLauncher.startActivityAsync('android.intent.action.INSTALL_PACKAGE', {
+            data: downloadResult.uri,
+            flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+          });
+        }
+      } else {
+        Alert.alert('Error', 'APK updates are only supported on Android');
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to download update');
+      console.error('Update error:', error);
+      Alert.alert('Error', 'Failed to download and install update');
     }
   };
 

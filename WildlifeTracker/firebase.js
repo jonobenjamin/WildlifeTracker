@@ -9,4 +9,4 @@ export const firebaseConfig = {
   appId: "your-app-id"
 };
 
-// Firebase services will be initialized in App.tsx
+// TODO: Update this with your actual Firebase config after creating the project
