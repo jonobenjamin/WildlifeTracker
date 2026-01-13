@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: WildlifeTracker
 
     steps:
     - name: Checkout code
@@ -18,19 +21,16 @@ jobs:
       with:
         node-version: '18'
         cache: 'npm'
+        cache-dependency-path: WildlifeTracker/package-lock.json
 
     - name: Install dependencies
-      run: |
-        cd WildlifeTracker
-        npm ci
+      run: npm ci
 
     - name: Install Expo CLI
       run: npm install -g @expo/cli
 
     - name: Build APK
-      run: |
-        cd WildlifeTracker
-        npx expo build:android --non-interactive --type apk
+      run: npx expo build:android --non-interactive --type apk
       env:
         EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
