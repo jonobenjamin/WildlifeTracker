@@ -1,0 +1,10 @@
+# EAS Build ignore file
+node_modules/
+.expo/
+.expo-shared/
+dist/
+build/
+*.apk
+*.aab
+*.ipa
+*.tar.gz
