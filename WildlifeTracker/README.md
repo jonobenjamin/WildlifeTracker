@@ -115,7 +115,7 @@ Host `latest.json` on your server:
 {
   "version": "1.0.1",
   "mandatory": false,
-  "apk_url": "https://yourdomain.com/app_v1.0.1.apk",
+  "apk_url": "https://yourdomain.com/wildlife-tracker_v1.0.1.apk",
   "notes": "Bug fixes and new features"
 }
 ```

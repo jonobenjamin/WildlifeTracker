@@ -1,5 +1,5 @@
 // Firebase configuration
-// Replace with your actual Firebase project config
+// Replace with your actual Firebase project config from Firebase Console > Project Settings > General > Your apps
 export const firebaseConfig = {
   apiKey: "your-api-key-here",
   authDomain: "your-project.firebaseapp.com",

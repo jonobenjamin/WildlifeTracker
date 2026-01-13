@@ -22,7 +22,7 @@ import { getFirestore } from 'firebase/firestore';
 // Firebase config - you'll need to add your own
 const firebaseConfig = {
   // Add your Firebase config here
-  apiKey: "your-api-key",
+  apiKey: "your-api-key-here",
   authDomain: "your-project.firebaseapp.com",
   projectId: "your-project-id",
   storageBucket: "your-project.appspot.com",
