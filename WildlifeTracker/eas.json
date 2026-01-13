@@ -15,8 +15,7 @@
     },
     "production": {
       "android": {
-        "buildType": "apk",
-        "applicationId": "wildlife_tracker.V1"
+        "buildType": "apk"
       },
       "channel": "production"
     }
