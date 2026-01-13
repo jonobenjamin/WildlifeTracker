@@ -1,0 +1,41 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        cd WildlifeTracker
+        npm ci
+
+    - name: Install Expo CLI
+      run: npm install -g @expo/cli
+
+    - name: Build APK
+      run: |
+        cd WildlifeTracker
+        npx expo build:android --non-interactive --type apk
+      env:
+        EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: wildlife-tracker-apk
+        path: WildlifeTracker/*.apk

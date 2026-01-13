@@ -8,9 +8,16 @@
       "distribution": "internal"
     },
     "preview": {
+      "android": {
+        "buildType": "apk"
+      },
       "distribution": "internal"
     },
     "production": {
+      "android": {
+        "buildType": "apk",
+        "applicationId": "wildlife_tracker.V1"
+      },
       "channel": "production"
     }
   },
