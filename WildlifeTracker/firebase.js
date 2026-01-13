@@ -1,12 +1,10 @@
 // Firebase configuration
-// Replace with your actual Firebase project config from Firebase Console > Project Settings > General > Your apps
+// Wildlife Tracker Firebase Project Config
 export const firebaseConfig = {
-  apiKey: "your-api-key-here",
-  authDomain: "your-project.firebaseapp.com",
-  projectId: "your-project-id",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "your-app-id"
+  apiKey: "AIzaSyAWXx5vLbeXXb3RYVpCci4EHsCXIrzOg5c",
+  authDomain: "wildlifetracker-4d28b.firebaseapp.com",
+  projectId: "wildlifetracker-4d28b",
+  storageBucket: "wildlifetracker-4d28b.firebasestorage.app",
+  messagingSenderId: "209541121506",
+  appId: "1:209541121506:android:96cbaa7850451fb54ba5bb"
 };
-
-// TODO: Update this with your actual Firebase config after creating the project
