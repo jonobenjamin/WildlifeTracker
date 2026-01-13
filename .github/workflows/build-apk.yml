@@ -17,26 +17,29 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        cache: 'npm'
-        cache-dependency-path: WildlifeTracker/package-lock.json
 
     - name: Install dependencies
       run: |
         cd WildlifeTracker
         npm ci
 
-    - name: Install Expo CLI
-      run: npm install -g @expo/cli
+    - name: Setup EAS
+      run: npm install -g @expo/cli eas-cli
 
-    - name: Build APK
+    - name: Login to Expo
       run: |
         cd WildlifeTracker
-        npx expo build:android --non-interactive --type apk
+        npx expo login -u ${{ secrets.EXPO_USERNAME }} -p ${{ secrets.EXPO_PASSWORD }}
+
+    - name: Build APK with Expo
+      run: |
+        cd WildlifeTracker
+        CI=1 npx expo build:android --type apk --no-publish
       env:
-        EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        CI: 1
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: wildlife-tracker-apk
-        path: WildlifeTracker/*.apk
+        path: WildlifeTracker/dist/*.apk
