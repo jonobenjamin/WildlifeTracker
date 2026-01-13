@@ -25,16 +25,18 @@ jobs:
         cd WildlifeTracker
         npm ci
 
-    - name: Build APK with Expo
+    - name: Install EAS CLI
+      run: npm install -g eas-cli
+
+    - name: Build APK with EAS
       run: |
         cd WildlifeTracker
-        npx expo build:android --type apk
+        eas build -p android --profile preview --non-interactive --no-wait
       env:
         EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        CI: 1
 
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: wildlife-tracker-apk
-        path: WildlifeTracker/dist/*.apk
+    - name: Output build info
+      run: |
+        echo "APK build started with EAS Build!"
+        echo "Check your Expo dashboard for download links:"
+        echo "https://expo.dev/accounts/[your-account]/projects/wildlife-tracker/builds"
