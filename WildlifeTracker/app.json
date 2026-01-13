@@ -23,11 +23,12 @@
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "INTERNET"
-      ]
+      ],
+      "versionCode": 1
     },
     "extra": {
       "eas": {
-        "projectId": "gps-tracker-project"
+        "projectId": "wildlife-tracker-app"
       }
     }
   }

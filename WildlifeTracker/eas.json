@@ -13,7 +13,7 @@
     "production": {
       "channel": "production"
     },
-    "production-apk": {
+    "apk": {
       "channel": "production",
       "android": {
         "buildType": "apk"
