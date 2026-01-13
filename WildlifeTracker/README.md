@@ -1,282 +1,138 @@
-# GPS Tracker
+# Wildlife Tracker
 
-A simple mobile app that captures GPS locations and saves them as GeoJSON files to GitHub.
-
-## 📱 Download Links
-
-**Latest Release:** [GitHub Releases](https://github.com/jonobenjamin/WildlifeTracker/releases/latest)
-
-### Direct Download Links
-- 📱 **Android APK**: Available in [Releases](https://github.com/jonobenjamin/WildlifeTracker/releases/latest)
+A React Native (Expo) + Firebase app for wildlife monitoring and tracking.
 
 ## Features
 
-- **GPS Capture**: Capture precise GPS coordinates with accuracy
-- **GeoJSON Export**: Creates GeoJSON files with location data
-- **GitHub Storage**: Automatically uploads GeoJSON files to your GitHub repository
-- **Simple Interface**: One-screen app with minimal setup
+- 📱 Android APK distribution (no Play Store required)
+- 🔐 Firebase Authentication (username/password)
+- 📴 Offline-first with automatic sync
+- 🔔 In-app updates
+- 📝 Survey forms for observations
+- 🗺️ GPS tracking and mapping
+- 📸 Photo capture
+- ☁️ Cloud storage for data
 
-## 📋 How It Works
+## Setup
 
-1. **Set up GitHub**: Enter your GitHub personal access token and repository name
-2. **Capture GPS**: Tap "Capture GPS" to get your current location
-3. **Upload**: Tap "Create GeoJSON & Upload" to save the location as a GeoJSON file
-4. **View Data**: Files appear in your GitHub repository under the `data/` folder
+### 1. Firebase Project
 
-## 📊 Sample GeoJSON Output
+1. Create a Firebase project at https://console.firebase.google.com/
+2. Enable Authentication with Email/Password
+3. Enable Firestore Database
+4. Enable Storage (for photos)
+5. Copy your Firebase config to `firebase.js`
 
-```json
-{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [-74.006015, 40.712728]
-      },
-      "properties": {
-        "id": "point_1640995200000",
-        "timestamp": "2023-12-31T12:00:00.000Z",
-        "accuracy": 5.2,
-        "altitude": 10.5
-      }
-    }
-  ]
-}
-```
-
-## Setup Instructions
-
-### 1. Install Dependencies
+### 2. Install Dependencies
 
 ```bash
-cd WildlifeTracker
 npm install
 ```
 
-### 2. Configure GitHub Repository
+### 3. Configure Firebase
 
-1. Create a new GitHub repository (public or private)
-2. Generate a Personal Access Token:
-   - Go to GitHub Settings → Developer settings → Personal access tokens
-   - Click "Generate new token (classic)"
-   - Select scopes: `repo` (full control of private repositories)
-   - Copy the token (keep it secure!)
+Edit `firebase.js` with your Firebase project configuration:
 
-### 3. Configure the App
-
-1. Open the app and go to the Settings tab
-2. Enter your GitHub Personal Access Token
-3. Enter your repository in format: `username/repository-name`
-4. Optionally customize the data path (default: `data/observations`)
-5. Tap "Test Connection" to verify settings
-6. Tap "Save Settings"
+```javascript
+export const firebaseConfig = {
+  apiKey: "your-api-key",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "your-app-id"
+};
+```
 
 ### 4. Run the App
 
 ```bash
-# For development
-npx expo start
-
-# Or run on specific platform
-npx expo run:ios
-npx expo run:android
+npm start
 ```
 
-## How to Use
-
-### Making Observations
-
-1. Open the "Observe" tab
-2. Select the wildlife species from the dropdown
-3. Enter your name as the enumerator
-4. Add any additional observations/items (comma-separated)
-5. Tap "Capture GPS Location" to get coordinates
-6. Tap "Save Observation"
-
-### Offline Usage
-
-- The app works completely offline
-- Observations are stored locally and added to the outbox
-- When you regain internet connection, go to the "Outbox" tab and tap "Sync All"
-
-### Managing Outbox
-
-- View all pending observations in the "Outbox" tab
-- See sync status and retry counts
-- Manually trigger sync with "Sync All" button
-- Remove items if needed
-
-## Data Format
-
-Each observation is saved as a JSON file with this structure:
-
-```json
-{
-  "id": "obs_1640995200000_abc123",
-  "species": "White-tailed Deer",
-  "items": ["tracks", "scat"],
-  "enumerator": "John Doe",
-  "location": {
-    "latitude": 40.7128,
-    "longitude": -74.0060,
-    "accuracy": 5.2,
-    "altitude": 10.5
-  },
-  "timestamp": "2023-12-31T12:00:00.000Z",
-  "synced": true
-}
-```
-
-## File Structure
-
-```
-data/observations/
-├── obs_1640995200000_abc123.json
-├── obs_1640995260000_def456.json
-└── ...
-```
-
-## Permissions Required
-
-- **Location**: To capture GPS coordinates for observations
-- **Network**: To sync data with GitHub when online
-
-## Troubleshooting
-
-### Location Permissions
-- iOS: Settings → Wildlife Tracker → Location → While Using the App
-- Android: Settings → Apps → Wildlife Tracker → Permissions → Location
-
-### GitHub Connection Issues
-- Verify your Personal Access Token is correct and has `repo` scope
-- Check that the repository exists and you have write access
-- Ensure repository format is `username/repo-name`
-
-### Sync Failures
-- Check internet connection
-- Verify GitHub settings are correct
-- Look at error messages in the outbox for specific issues
-
-## Development
-
-### Project Structure
-
-```
-src/
-├── components/          # React components
-│   ├── ObservationForm.tsx
-│   ├── OutboxScreen.tsx
-│   └── SettingsScreen.tsx
-├── services/           # Business logic
-│   ├── locationService.ts
-│   ├── storageService.ts
-│   └── syncService.ts
-└── types/             # TypeScript definitions
-    └── index.ts
-```
-
-### Key Services
-
-- **LocationService**: Handles GPS location capture
-- **StorageService**: Manages local data storage with AsyncStorage
-- **SyncService**: Handles GitHub API integration and syncing
-
-## 🚀 Quick Start
-
-### 1. Set Up GitHub Repository
-1. Create a new GitHub repository
-2. Generate a Personal Access Token:
-   - Go to GitHub → Settings → Developer settings → Personal access tokens
-   - Create new token with `repo` permissions
-   - Copy the token
-
-### 2. Configure the App
-1. Download and install the APK from [Releases](https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest)
-2. Open the app and tap on the token/repo fields to set them
-3. Enter your GitHub token and repository name (format: `username/repository`)
-
-### 3. Start Tracking
-1. Tap "Capture GPS" to get your location
-2. Tap "Create GeoJSON & Upload" to save to GitHub
-3. Files will appear in your repository under `data/` folder
-
-## 📦 Distribution & Installation
-
-### Android Installation
-1. Download the APK from [GitHub Releases](https://github.com/YOUR_USERNAME/YOUR_REPO/releases/latest)
-2. Enable "Install unknown apps" in Android settings
-3. Open the downloaded APK file and install
-
-### Building from Source
-
-#### Prerequisites
+For Android development:
 ```bash
-# Install Expo CLI
-npm install -g @expo/eas-cli
-eas login
+npm run android
 ```
 
-#### Build APK
+## Building APK
+
+### Local Build
 ```bash
-cd WildlifeTracker
-eas build:configure
-npm run build:android
+npx expo prebuild
+npx expo run:android --variant release
 ```
 
-#### Automated Builds
-The repository includes GitHub Actions that automatically build APKs when you create releases.
+### Cloud Build
+```bash
+npx expo build:android
+```
 
-## 📊 GeoJSON Output
+## Data Collection Types
 
-Each GPS capture creates a GeoJSON file like this:
+Choose based on your wildlife tracking needs:
 
-```json
-{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "Point",
-        "coordinates": [-74.006015, 40.712728]
-      },
-      "properties": {
-        "id": "point_1640995200000",
-        "timestamp": "2023-12-31T12:00:00.000Z",
-        "accuracy": 5.2,
-        "altitude": 10.5
-      }
+### Form-Based Collection
+- Discrete observations (sightings, counts, behaviors)
+- Survey-style data entry
+- Best for: Point-in-time wildlife monitoring
+
+### GPS Tracking
+- Continuous location monitoring
+- Movement patterns and migration
+- Best for: Animal tracking collars, range mapping
+
+### Hybrid Approach
+- Combine both methods for comprehensive monitoring
+
+## Firebase Security Rules
+
+Add these rules to your Firestore database:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can only access their own data
+    match /observations/{document} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
     }
-  ]
+
+    // Admin access for all users
+    match /users/{document} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.admin == true;
+    }
+  }
 }
 ```
 
-## ⚙️ Configuration
+## Update System
 
-### GitHub Setup
-- **Repository**: Create any public/private GitHub repository
-- **Token**: Personal Access Token with `repo` scope
-- **Path**: Files are saved to `data/` folder in your repository
+Host `latest.json` on your server:
 
-### App Permissions
-- Location access for GPS coordinates
-- Internet access for GitHub uploads
-
-## 🛠️ Development
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npx expo start
-
-# Build for production
-npm run build:android
+```json
+{
+  "version": "1.0.1",
+  "mandatory": false,
+  "apk_url": "https://yourdomain.com/app_v1.0.1.apk",
+  "notes": "Bug fixes and new features"
+}
 ```
 
-## 📝 License
+## Project Structure
 
-MIT License
+```
+WildlifeTracker/
+├── src/
+│   ├── screens/
+│   │   ├── LoginScreen.tsx
+│   │   ├── HomeScreen.tsx
+│   │   ├── SurveyFormScreen.tsx
+│   │   └── MapScreen.tsx
+│   └── components/
+├── firebase.js
+├── App.tsx
+├── app.json
+└── package.json
+```

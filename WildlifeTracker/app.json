@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "GPS Tracker",
-    "slug": "gps-tracker",
+    "name": "Wildlife Tracker",
+    "slug": "wildlife-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,25 +11,51 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "bundleIdentifier": "com.gpstracker.app",
-      "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "This app captures GPS coordinates for location tracking."
-      }
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.wildlifetracker"
     },
     "android": {
-      "package": "com.gpstracker.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.yourcompany.wildlifetracker",
       "permissions": [
-        "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "INTERNET"
-      ],
-      "versionCode": 1
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
     },
-    "extra": {
-      "eas": {
-        "projectId": "wildlife-tracker-app"
-      }
-    }
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": false
+          }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Wildlife Tracker to use your location for tracking wildlife observations."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Wildlife Tracker to access your photos for wildlife documentation."
+        }
+      ]
+    ]
   }
 }
