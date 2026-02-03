@@ -21,9 +21,80 @@ const validateApiKey = (req, res, next) => {
 // Apply API key validation to all routes
 router.use(validateApiKey);
 
-// API is now write-only - GET endpoints removed for security
+// GET /api/observations - Fetch observations for map display (READ-ONLY with location data only)
+router.get('/', async (req, res) => {
+  try {
+    // Check if Firebase is initialized
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not available',
+        message: 'Firebase not configured - observation data unavailable'
+      });
+    }
 
-// POST /api/observations - Create new observation (WRITE-ONLY API)
+    console.log('GET /api/observations requested for map display');
+
+    // Fetch observations from Firestore
+    const snapshot = await db.collection('observations')
+      .orderBy('timestamp', 'desc')
+      .get();
+
+    const observations = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      // Only include location-based data for map display
+      const observation = {
+        id: doc.id,
+        category: data.category,
+        timestamp: data.timestamp,
+        synced: data.synced,
+        user: data.user // Include user information
+      };
+
+      // Add category-specific data (without sensitive information)
+      if (data.category === 'Sighting' && data.animal) {
+        observation.animal = data.animal;
+      }
+      if (data.category === 'Incident' && data.incident_type) {
+        observation.incident_type = data.incident_type;
+      }
+      if (data.category === 'Maintenance' && data.maintenance_type) {
+        observation.maintenance_type = data.maintenance_type;
+      }
+
+      // Only include GPS coordinates if they exist
+      if (data.latitude !== undefined && data.longitude !== undefined) {
+        observation.latitude = data.latitude;
+        observation.longitude = data.longitude;
+      }
+
+      // Only include observations that have location data
+      if (observation.latitude !== undefined && observation.longitude !== undefined) {
+        observations.push(observation);
+      }
+    });
+
+    console.log(`Successfully fetched ${observations.length} observations with location data`);
+
+    res.json({
+      success: true,
+      message: 'Observations fetched successfully',
+      data: observations,
+      count: observations.length
+    });
+
+  } catch (error) {
+    console.error('Error fetching observations:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch observations',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// POST /api/observations - Create new observation
 router.post('/', async (req, res) => {
   try {
     // Check if Firebase is initialized
@@ -45,7 +116,8 @@ router.post('/', async (req, res) => {
       maintenance_type,
       latitude,
       longitude,
-      timestamp
+      timestamp,
+      user
     } = req.body;
 
     // Validate required fields
@@ -81,7 +153,8 @@ router.post('/', async (req, res) => {
     const observationData = {
       category,
       timestamp: timestamp || new Date().toISOString(),
-      synced: true
+      synced: true,
+      user: user // Add user information
     };
 
     // Add category-specific data
