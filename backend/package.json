@@ -12,6 +12,7 @@
   "author": "Wildlife Tracker",
   "license": "MIT",
   "dependencies": {
+    "@emailjs/nodejs": "^4.0.1",
     "express": "^4.18.2",
     "firebase-admin": "^11.11.1",
     "protobufjs": "^7.2.5",
