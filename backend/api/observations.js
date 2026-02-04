@@ -1,4 +1,5 @@
 const express = require('express');
+const { sendPoachingIncidentNotifications, isPoachingIncident } = require('../services/notificationServices');
 
 const router = express.Router();
 
@@ -173,6 +174,24 @@ router.post('/', async (req, res) => {
     const docRef = await db.collection('observations').add(observationData);
 
     console.log('Successfully saved to Firestore with ID:', docRef.id);
+
+    // Send email notification if this is a poaching incident (non-blocking)
+    const savedObservation = {
+      id: docRef.id,
+      ...observationData
+    };
+    
+    if (isPoachingIncident(savedObservation)) {
+      console.log('🚨 Poaching incident detected - sending email notification');
+      // Send notification asynchronously without blocking the response
+      sendPoachingIncidentNotifications(savedObservation)
+        .then(results => {
+          console.log('Email notification sent:', results);
+        })
+        .catch(error => {
+          console.error('Email notification failed:', error);
+        });
+    }
 
     res.status(201).json({
       success: true,
