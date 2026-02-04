@@ -19,7 +19,7 @@
     "helmet": "^7.1.0",
     "dotenv": "^16.3.1",
     "express-rate-limit": "^7.1.5",
-    "@emailjs/nodejs": "^1.0.2"
+    "@emailjs/nodejs":  "^5.0.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
