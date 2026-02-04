@@ -2,31 +2,17 @@ const emailjs = require('@emailjs/nodejs');
 
 // Initialize EmailJS
 const initializeEmailJS = () => {
-  console.log('🔧 Checking EmailJS config...');
-  console.log('   SERVICE_ID:', !!process.env.EMAILJS_SERVICE_ID);
-  console.log('   TEMPLATE_ID:', !!process.env.EMAILJS_TEMPLATE_ID);
-  console.log('   PUBLIC_KEY:', !!process.env.EMAILJS_PUBLIC_KEY);
-  console.log('   PRIVATE_KEY:', !!process.env.EMAILJS_PRIVATE_KEY);
-
   if (!process.env.EMAILJS_SERVICE_ID || !process.env.EMAILJS_TEMPLATE_ID || !process.env.EMAILJS_PUBLIC_KEY || !process.env.EMAILJS_PRIVATE_KEY) {
-    console.warn('❌ EmailJS credentials not fully configured. Email notifications disabled.');
-    console.warn('Missing:', {
-      serviceId: !process.env.EMAILJS_SERVICE_ID,
-      templateId: !process.env.EMAILJS_TEMPLATE_ID,
-      publicKey: !process.env.EMAILJS_PUBLIC_KEY,
-      privateKey: !process.env.EMAILJS_PRIVATE_KEY
-    });
+    console.warn('EmailJS credentials not configured. Email notifications disabled.');
     return false;
   }
 
-  console.log('✅ All EmailJS credentials found, initializing...');
   // Initialize EmailJS with both public and private keys
   emailjs.init({
     publicKey: process.env.EMAILJS_PUBLIC_KEY,
     privateKey: process.env.EMAILJS_PRIVATE_KEY,
   });
 
-  console.log('✅ EmailJS initialized successfully');
   return true;
 };
 
