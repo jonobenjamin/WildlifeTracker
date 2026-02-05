@@ -133,7 +133,8 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       observations: '/api/observations (POST only - write-only)',
-      images: '/api/observations/:id/image (secure image access)'
+      images: '/api/observations/:id/image (secure image access)',
+      testFile: '/test-file (POST - test file upload)'
     },
     docs: 'See README.md for API documentation'
   });
@@ -142,6 +143,19 @@ app.get('/', (req, res) => {
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// Simple file test endpoint
+app.post('/test-file', require('multer')({ dest: 'uploads/' }).single('image'), (req, res) => {
+  res.json({
+    file: req.file ? {
+      name: req.file.originalname,
+      size: req.file.size,
+      type: req.file.mimetype
+    } : null,
+    body: req.body,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // API Routes
