@@ -135,6 +135,7 @@ router.post('/', upload.single('image'), async (req, res) => {
     console.log('POST /api/observations received');
     console.log('Headers:', JSON.stringify(req.headers, null, 2));
     console.log('Body:', JSON.stringify(req.body, null, 2));
+    console.log('Files:', req.file ? `Present: ${req.file.originalname} (${req.file.size} bytes)` : 'No file');
 
     const {
       category,
@@ -234,6 +235,8 @@ router.post('/', upload.single('image'), async (req, res) => {
         // Store the image path for secure access
         observationData.image_path = fileName;
         observationData.image_filename = req.file.originalname;
+
+        console.log('Image uploaded successfully:', fileName);
 
       } catch (error) {
         console.error('Image upload failed:', error.message);
