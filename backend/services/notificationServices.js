@@ -28,12 +28,14 @@ const formatIncidentDetails = (incidentData) => {
     id,
     category,
     incident_type,
+    poaching_type,
     latitude,
     longitude,
     timestamp,
     user,
     animal,
-    notes
+    notes,
+    image_url
   } = incidentData;
 
   const mapsLink = generateGoogleMapsLink(latitude, longitude);
@@ -50,6 +52,7 @@ const formatIncidentDetails = (incidentData) => {
     id,
     category,
     incident_type,
+    poaching_type: poaching_type || 'N/A',
     latitude,
     longitude,
     mapsLink,
@@ -57,7 +60,8 @@ const formatIncidentDetails = (incidentData) => {
     user: user || 'Unknown',
     animal: animal || 'N/A',
     notes: notes || 'No additional notes',
-    coordinates: `${latitude}, ${longitude}`
+    coordinates: `${latitude}, ${longitude}`,
+    has_image: !!image_url // Just indicate if image exists, don't provide URL
   };
 };
 
@@ -82,6 +86,7 @@ const sendEmailNotification = async (incidentData) => {
   const templateParams = {
     incident_id: details.id,
     incident_type: details.incident_type,
+    poaching_type: details.poaching_type,
     timestamp: details.timestamp,
     reporter: details.user,
     animal: details.animal || 'N/A',
@@ -89,6 +94,7 @@ const sendEmailNotification = async (incidentData) => {
     notes: details.notes,
     maps_link: details.mapsLink,
     maps_link_text: details.mapsLink,
+    image_status: details.has_image ? 'Image attached (access via app)' : 'No image attached',
     from_name: process.env.EMAIL_FROM_NAME || 'Wildlife Tracker Alert'
   };
 
