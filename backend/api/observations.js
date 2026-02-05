@@ -213,36 +213,10 @@ router.post('/', upload.single('image'), async (req, res) => {
     // Handle image upload to Firebase Storage
     if (req.file) {
       try {
-        console.log('📸 Starting image upload process...');
-        console.log('   File:', req.file.originalname, 'Size:', req.file.size, 'bytes', 'Type:', req.file.mimetype);
-
-        // Get Firebase Storage bucket
-        let bucket;
-        try {
-          bucket = getStorage().bucket();
-          console.log('✅ Got storage bucket:', bucket.name);
-          console.log('🔍 Expected bucket: wildlifetracker-4d28b.firebasestorage.app');
-          console.log('✅ Bucket name correct:', bucket.name === 'wildlifetracker-4d28b.firebasestorage.app');
-        } catch (bucketError) {
-          console.error('❌ Failed to get storage bucket:', bucketError.message);
-          console.error('🔍 This usually means Firebase Storage wasn\'t initialized properly');
-          throw new Error('Storage bucket not accessible');
-        }
-
-        // Check if bucket exists
-        const [bucketExists] = await bucket.exists();
-        if (!bucketExists) {
-          console.error('❌ Storage bucket does not exist:', bucket.name);
-          throw new Error('Storage bucket does not exist - create it in Firebase Console > Storage');
-        }
-
+        const bucket = getStorage().bucket();
         const fileName = `observations/${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         const file = bucket.file(fileName);
 
-        console.log('📤 Uploading to Firebase Storage path:', fileName);
-
-        // Upload the file
-        console.log('📤 Starting file upload to Firebase Storage...');
         await file.save(req.file.buffer, {
           metadata: {
             contentType: req.file.mimetype,
@@ -256,41 +230,15 @@ router.post('/', upload.single('image'), async (req, res) => {
             }
           },
         });
-        console.log('✅ File uploaded to Firebase Storage successfully');
 
-        // Store the image path (not public URL) for secure access
+        // Store the image path for secure access
         observationData.image_path = fileName;
         observationData.image_filename = req.file.originalname;
 
-        console.log('✅ Image uploaded successfully to Firebase Storage:', fileName);
-
       } catch (error) {
-        console.error('❌ CRITICAL: Image upload failed!');
-        console.error('   Error message:', error.message);
-        console.error('   Error code:', error.code || 'No code');
-
-        // Log additional debugging info
-        console.log('🔍 Debugging info:');
-        console.log('   - File size:', req.file.size, 'bytes');
-        console.log('   - File type:', req.file.mimetype);
-        console.log('   - Original name:', req.file.originalname);
-
-        // Try to get bucket info for debugging
-        try {
-          const bucket = getStorage().bucket();
-          console.log('   - Bucket name:', bucket.name);
-          const [exists] = await bucket.exists();
-          console.log('   - Bucket exists:', exists);
-        } catch (debugError) {
-          console.error('   - Could not check bucket:', debugError.message);
-        }
-
-        // Don't fail the whole observation if image upload fails
-        console.log('⚠️  CONTINUING WITHOUT IMAGE - Observation will be saved without image');
-        console.log('🔧 To fix: Check Firebase Console > Storage and ensure bucket exists');
+        console.error('Image upload failed:', error.message);
+        // Continue without image if upload fails
       }
-    } else {
-      console.log('ℹ️  No image file provided in request');
     }
 
     console.log('Attempting to save to Firestore:', observationData);
