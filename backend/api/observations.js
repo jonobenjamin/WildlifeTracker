@@ -1,7 +1,26 @@
 const express = require('express');
+const multer = require('multer');
+const { getStorage } = require('firebase-admin/storage');
 const { sendPoachingIncidentNotifications, isPoachingIncident } = require('../services/notificationServices');
 
 const router = express.Router();
+
+// Configure multer for image uploads
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    // Accept only image files
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
 
 module.exports = (db) => {
 
@@ -59,9 +78,20 @@ router.get('/', async (req, res) => {
       }
       if (data.category === 'Incident' && data.incident_type) {
         observation.incident_type = data.incident_type;
+        if (data.poaching_type) {
+          observation.poaching_type = data.poaching_type;
+        }
       }
       if (data.category === 'Maintenance' && data.maintenance_type) {
         observation.maintenance_type = data.maintenance_type;
+      }
+
+      // Add image data if available
+      if (data.image_url) {
+        observation.image_url = data.image_url;
+      }
+      if (data.image_filename) {
+        observation.image_filename = data.image_filename;
       }
 
       // Only include GPS coordinates if they exist
@@ -96,7 +126,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/observations - Create new observation
-router.post('/', async (req, res) => {
+router.post('/', upload.single('image'), async (req, res) => {
   try {
     // Check if Firebase is initialized
     if (!db) {
@@ -114,6 +144,7 @@ router.post('/', async (req, res) => {
       category,
       animal,
       incident_type,
+      poaching_type,
       maintenance_type,
       latitude,
       longitude,
@@ -144,6 +175,17 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Validate poaching type for poaching incidents
+    const validPoachingTypes = ['Carcass', 'Snare', 'Poacher'];
+    if (category === 'Incident' && incident_type && incident_type.toLowerCase().includes('poach')) {
+      if (!poaching_type || !validPoachingTypes.includes(poaching_type)) {
+        return res.status(400).json({
+          success: false,
+          error: `Poaching type must be one of: ${validPoachingTypes.join(', ')}`
+        });
+      }
+    }
+
     if (category === 'Maintenance' && !maintenance_type) {
       return res.status(400).json({
         success: false,
@@ -160,13 +202,44 @@ router.post('/', async (req, res) => {
 
     // Add category-specific data
     if (category === 'Sighting') observationData.animal = animal;
-    if (category === 'Incident') observationData.incident_type = incident_type;
+    if (category === 'Incident') {
+      observationData.incident_type = incident_type;
+      if (poaching_type) observationData.poaching_type = poaching_type;
+    }
     if (category === 'Maintenance') observationData.maintenance_type = maintenance_type;
 
     // Add GPS if provided
     if (latitude !== undefined && longitude !== undefined) {
       observationData.latitude = latitude;
       observationData.longitude = longitude;
+    }
+
+    // Handle image upload to Firebase Storage
+    if (req.file) {
+      try {
+        const bucket = getStorage().bucket();
+        const fileName = `observations/${Date.now()}_${req.file.originalname}`;
+        const file = bucket.file(fileName);
+
+        // Upload the file
+        await file.save(req.file.buffer, {
+          metadata: {
+            contentType: req.file.mimetype,
+          },
+          public: true, // Make the file publicly accessible
+        });
+
+        // Get the public URL
+        const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+        observationData.image_url = imageUrl;
+        observationData.image_filename = req.file.originalname;
+
+        console.log('Image uploaded successfully:', imageUrl);
+      } catch (error) {
+        console.error('Error uploading image:', error);
+        // Don't fail the whole request if image upload fails
+        // Just log the error and continue without the image
+      }
     }
 
     console.log('Attempting to save to Firestore:', observationData);
