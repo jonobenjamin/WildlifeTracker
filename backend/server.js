@@ -146,12 +146,18 @@ app.get('/health', (req, res) => {
 });
 
 // Simple file test endpoint
-app.post('/test-file', require('multer')({ dest: 'uploads/' }).single('image'), (req, res) => {
+const testUpload = require('multer')({
+  storage: require('multer').memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }
+}).single('image');
+
+app.post('/test-file', testUpload, (req, res) => {
   res.json({
     file: req.file ? {
       name: req.file.originalname,
       size: req.file.size,
-      type: req.file.mimetype
+      type: req.file.mimetype,
+      buffer: req.file.buffer ? `Present (${req.file.buffer.length} bytes)` : 'Missing'
     } : null,
     body: req.body,
     timestamp: new Date().toISOString()
