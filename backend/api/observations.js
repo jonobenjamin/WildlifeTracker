@@ -225,21 +225,48 @@ router.post('/', upload.single('image'), async (req, res) => {
     }
 
     // Handle image upload to Firebase Storage
+    // Support both multipart/form-data files and base64 JSON fields
+    let imageBuffer = null;
+    let imageMimeType = null;
+    let imageOriginalName = null;
+
     if (req.file) {
-      console.log('📸 Image file detected, attempting upload...');
+      // Multipart/form-data upload
+      console.log('📸 Image file detected (multipart/form-data)');
+      imageBuffer = req.file.buffer;
+      imageMimeType = req.file.mimetype;
+      imageOriginalName = req.file.originalname;
+    } else if (req.body.poaching_image && req.body.poaching_image_name) {
+      // Base64 JSON upload (current frontend method)
+      console.log('📸 Image data detected (base64 JSON)');
+      try {
+        // Remove data URL prefix if present (e.g., "data:image/jpeg;base64,")
+        const base64Data = req.body.poaching_image.replace(/^data:image\/[a-z]+;base64,/, '');
+        imageBuffer = Buffer.from(base64Data, 'base64');
+        imageMimeType = 'image/jpeg'; // Default, could be detected from data URL
+        imageOriginalName = req.body.poaching_image_name;
+        console.log('✅ Base64 image decoded, size:', imageBuffer.length, 'bytes');
+      } catch (decodeError) {
+        console.error('❌ Failed to decode base64 image:', decodeError.message);
+      }
+    }
+
+    // Upload image if we have data
+    if (imageBuffer && imageMimeType && imageOriginalName) {
+      console.log('📤 Attempting Firebase Storage upload...');
       try {
         const bucket = getStorage().bucket();
-        const fileName = `observations/${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const fileName = `observations/${Date.now()}_${imageOriginalName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         const file = bucket.file(fileName);
 
         console.log('📤 Uploading to Firebase Storage:', fileName);
 
-        await file.save(req.file.buffer, {
+        await file.save(imageBuffer, {
           metadata: {
-            contentType: req.file.mimetype,
+            contentType: imageMimeType,
             metadata: {
               uploadedBy: user || 'unknown',
-              originalName: req.file.originalname,
+              originalName: imageOriginalName,
               uploadTimestamp: new Date().toISOString(),
               category: category,
               incident_type: incident_type || null,
@@ -250,14 +277,16 @@ router.post('/', upload.single('image'), async (req, res) => {
 
         // Store the image path for secure access
         observationData.image_path = fileName;
-        observationData.image_filename = req.file.originalname;
+        observationData.image_filename = imageOriginalName;
 
-        console.log('Image uploaded successfully:', fileName);
+        console.log('✅ Image uploaded successfully to Firebase Storage:', fileName);
 
       } catch (error) {
-        console.error('Image upload failed:', error.message);
+        console.error('❌ Image upload failed:', error.message);
         // Continue without image if upload fails
       }
+    } else {
+      console.log('ℹ️ No image data found to upload');
     }
 
     console.log('Attempting to save to Firestore:', observationData);
