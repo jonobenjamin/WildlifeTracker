@@ -133,9 +133,22 @@ router.post('/', upload.single('image'), async (req, res) => {
       });
     }
     console.log('POST /api/observations received');
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
-    console.log('Body:', JSON.stringify(req.body, null, 2));
-    console.log('Files:', req.file ? `Present: ${req.file.originalname} (${req.file.size} bytes)` : 'No file');
+    console.log('Content-Type:', req.headers['content-type']);
+    console.log('Body fields:', Object.keys(req.body));
+    console.log('Body values:', JSON.stringify(req.body, null, 2));
+    console.log('File present:', !!req.file);
+    if (req.file) {
+      console.log('File details:', {
+        fieldname: req.file.fieldname,
+        originalname: req.file.originalname,
+        encoding: req.file.encoding,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        buffer: req.file.buffer ? `Present (${req.file.buffer.length} bytes)` : 'Missing'
+      });
+    } else {
+      console.log('No file received - check if frontend is sending image as multipart/form-data');
+    }
 
     const {
       category,
@@ -213,10 +226,13 @@ router.post('/', upload.single('image'), async (req, res) => {
 
     // Handle image upload to Firebase Storage
     if (req.file) {
+      console.log('📸 Image file detected, attempting upload...');
       try {
         const bucket = getStorage().bucket();
         const fileName = `observations/${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         const file = bucket.file(fileName);
+
+        console.log('📤 Uploading to Firebase Storage:', fileName);
 
         await file.save(req.file.buffer, {
           metadata: {
