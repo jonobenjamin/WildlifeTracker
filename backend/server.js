@@ -73,49 +73,7 @@ try {
     console.log('Firebase settings already configured, continuing...');
   }
 
-  console.log('Firebase initialized successfully with database: wildlifetracker-db');
-
-  // Test Firebase Storage initialization
-  try {
-    console.log('🔍 Initializing Firebase Storage...');
-    const storage = admin.storage();
-    const bucket = storage.bucket();
-
-    console.log('📦 Storage bucket configured:', bucket.name);
-    console.log('🎯 Target bucket: wildlifetracker-4d28b.firebasestorage.app');
-    console.log('✅ Bucket name matches:', bucket.name === 'wildlifetracker-4d28b.firebasestorage.app');
-
-    // Test if bucket exists and is accessible
-    const [exists] = await bucket.exists();
-    console.log('✅ Storage bucket exists in Firebase:', exists);
-
-    if (!exists) {
-      console.error('❌ CRITICAL: Firebase Storage bucket does not exist!');
-      console.error('🔧 SOLUTION: Go to Firebase Console > Storage > Get started');
-      console.error('   Create a bucket with default settings');
-      console.error('   Image uploads will NOT work until bucket exists!');
-    } else {
-      console.log('✅ Firebase Storage is ready for image uploads');
-
-      // Test bucket permissions with a simple operation
-      try {
-        const [files] = await bucket.getFiles({ maxResults: 1 });
-        console.log('✅ Storage bucket permissions OK (can list files)');
-        console.log('📊 Current files in bucket:', files.length);
-      } catch (permError) {
-        console.warn('⚠️  Storage bucket permissions issue:', permError.message);
-        console.warn('   This might cause image upload failures');
-        console.warn('   Check service account has Storage permissions');
-      }
-    }
-  } catch (storageError) {
-    console.error('❌ Failed to initialize Firebase Storage:', storageError.message);
-    console.error('   This means image uploads will fail!');
-    console.error('🔧 TROUBLESHOOTING:');
-    console.error('   1. Check Firebase project has Storage enabled');
-    console.error('   2. Verify service account has Storage permissions');
-    console.error('   3. Check Storage security rules allow operations');
-  }
+  console.log('Firebase initialized successfully');
 
 } catch (error) {
   console.error('Failed to initialize Firebase:', error.message);
@@ -175,102 +133,10 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       observations: '/api/observations (POST only - write-only)',
-      images: '/api/observations/:id/image (secure image access)',
-      test: '/test',
-      testStorage: '/test-storage (Firebase Storage diagnostic)'
+      images: '/api/observations/:id/image (secure image access)'
     },
     docs: 'See README.md for API documentation'
   });
-});
-
-// Test endpoint
-app.get('/test', (req, res) => {
-  res.json({
-    message: 'Vercel deployment working!',
-    timestamp: new Date().toISOString(),
-    env: {
-      NODE_ENV: process.env.NODE_ENV,
-      hasApiKey: !!process.env.API_KEY,
-      hasFirebaseProject: !!process.env.FIREBASE_PROJECT_ID,
-      hasServiceAccount: !!process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-    }
-  });
-});
-
-// Test Firebase Storage endpoint
-app.get('/test-storage', async (req, res) => {
-  try {
-    if (!db) {
-      return res.status(503).json({
-        error: 'Firebase not initialized',
-        message: 'Cannot test storage without Firebase'
-      });
-    }
-
-    console.log('🧪 Testing Firebase Storage from deployed app...');
-
-    const storage = admin.storage();
-    const bucket = storage.bucket();
-
-    console.log('📦 Bucket name:', bucket.name);
-    console.log('🔍 Expected: wildlifetracker-4d28b.firebasestorage.app');
-    console.log('✅ Bucket name correct:', bucket.name === 'wildlifetracker-4d28b.firebasestorage.app');
-
-    const [exists] = await bucket.exists();
-    console.log('✅ Bucket exists:', exists);
-
-    if (!exists) {
-      return res.status(500).json({
-        error: 'Storage bucket does not exist',
-        bucket: bucket.name,
-        expected: 'wildlifetracker-4d28b.firebasestorage.app',
-        solution: 'Create bucket in Firebase Console > Storage'
-      });
-    }
-
-    // Test upload like image upload does
-    const testFileName = `test/deploy-test-${Date.now()}.txt`;
-    const testFile = bucket.file(testFileName);
-
-    console.log('📤 Testing upload to:', testFileName);
-
-    await testFile.save('Deployed app storage test', {
-      metadata: { contentType: 'text/plain' }
-    });
-
-    console.log('✅ Upload test passed');
-
-    // Clean up
-    await testFile.delete();
-    console.log('🧹 Cleaned up test file');
-
-    res.json({
-      success: true,
-      message: 'Firebase Storage is working!',
-      bucket: {
-        name: bucket.name,
-        exists: exists,
-        uploadTest: 'passed',
-        correctName: bucket.name === 'wildlifetracker-4d28b.firebasestorage.app'
-      },
-      timestamp: new Date().toISOString()
-    });
-
-  } catch (error) {
-    console.error('❌ Storage test failed:', error);
-    res.status(500).json({
-      error: 'Storage test failed',
-      message: error.message,
-      code: error.code,
-      bucket: 'wildlifetracker-4d28b.firebasestorage.app',
-      troubleshooting: [
-        'Check Firebase Console > Storage > Create bucket',
-        'Verify bucket name is exactly: wildlifetracker-4d28b.firebasestorage.app',
-        'Check service account has Storage permissions',
-        'Verify Storage security rules allow admin access'
-      ]
-    });
-  }
 });
 
 // Health check endpoint
