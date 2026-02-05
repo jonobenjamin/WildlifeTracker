@@ -1,7 +1,23 @@
 const express = require('express');
+const multer = require('multer');
+const { getStorage } = require('firebase-admin/storage');
 const { sendPoachingIncidentNotifications, isPoachingIncident } = require('../services/notificationServices');
 
 const router = express.Router();
+
+// Configure multer for image uploads
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
 
 module.exports = (db) => {
 
@@ -59,9 +75,19 @@ router.get('/', async (req, res) => {
       }
       if (data.category === 'Incident' && data.incident_type) {
         observation.incident_type = data.incident_type;
+        if (data.poaching_type) {
+          observation.poaching_type = data.poaching_type;
+        }
       }
       if (data.category === 'Maintenance' && data.maintenance_type) {
         observation.maintenance_type = data.maintenance_type;
+      }
+
+      // Add image data if available (path for secure access, filename for display)
+      if (data.image_path) {
+        observation.has_image = true;
+        observation.image_filename = data.image_filename;
+        // Note: image_url is not provided - images must be accessed via secure endpoint
       }
 
       // Only include GPS coordinates if they exist
@@ -96,7 +122,7 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/observations - Create new observation
-router.post('/', async (req, res) => {
+router.post('/', upload.single('image'), async (req, res) => {
   try {
     // Check if Firebase is initialized
     if (!db) {
@@ -114,6 +140,7 @@ router.post('/', async (req, res) => {
       category,
       animal,
       incident_type,
+      poaching_type,
       maintenance_type,
       latitude,
       longitude,
@@ -151,6 +178,17 @@ router.post('/', async (req, res) => {
       });
     }
 
+    // Validate poaching type for poaching incidents
+    const validPoachingTypes = ['Carcass', 'Snare', 'Poacher'];
+    if (category === 'Incident' && incident_type && incident_type.toLowerCase().includes('poach')) {
+      if (!poaching_type || !validPoachingTypes.includes(poaching_type)) {
+        return res.status(400).json({
+          success: false,
+          error: `Poaching type must be one of: ${validPoachingTypes.join(', ')}`
+        });
+      }
+    }
+
     const observationData = {
       category,
       timestamp: timestamp || new Date().toISOString(),
@@ -160,13 +198,42 @@ router.post('/', async (req, res) => {
 
     // Add category-specific data
     if (category === 'Sighting') observationData.animal = animal;
-    if (category === 'Incident') observationData.incident_type = incident_type;
+    if (category === 'Incident') {
+      observationData.incident_type = incident_type;
+      if (poaching_type) observationData.poaching_type = poaching_type;
+    }
     if (category === 'Maintenance') observationData.maintenance_type = maintenance_type;
 
     // Add GPS if provided
     if (latitude !== undefined && longitude !== undefined) {
       observationData.latitude = latitude;
       observationData.longitude = longitude;
+    }
+
+    // Handle image upload to Firebase Storage
+    if (req.file) {
+      try {
+        console.log('Uploading image:', req.file.originalname, 'Size:', req.file.size, 'bytes');
+
+        const bucket = getStorage().bucket();
+        const fileName = `observations/${Date.now()}_${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+        const file = bucket.file(fileName);
+
+        await file.save(req.file.buffer, {
+          metadata: {
+            contentType: req.file.mimetype,
+          },
+        });
+
+        // Store the image path (not public URL) for secure access
+        observationData.image_path = fileName;
+        observationData.image_filename = req.file.originalname;
+
+        console.log('Image uploaded successfully:', imageUrl);
+      } catch (error) {
+        console.error('Image upload failed:', error.message);
+        // Continue without image if upload fails
+      }
     }
 
     console.log('Attempting to save to Firestore:', observationData);
@@ -217,7 +284,70 @@ router.post('/', async (req, res) => {
   }
 });
 
-// API is write-only - only POST / (create) endpoint is available
+// GET /api/observations/:id/image - Secure image access
+router.get('/:id/image', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Observation ID is required'
+      });
+    }
+
+    // Get observation data to verify it exists and has an image
+    const doc = await db.collection('observations').doc(id).get();
+
+    if (!doc.exists) {
+      return res.status(404).json({
+        success: false,
+        error: 'Observation not found'
+      });
+    }
+
+    const observationData = doc.data();
+    if (!observationData.image_path) {
+      return res.status(404).json({
+        success: false,
+        error: 'No image found for this observation'
+      });
+    }
+
+    // Get the image from Firebase Storage
+    const bucket = getStorage().bucket();
+    const file = bucket.file(observationData.image_path);
+
+    // Check if file exists
+    const [exists] = await file.exists();
+    if (!exists) {
+      return res.status(404).json({
+        success: false,
+        error: 'Image file not found in storage'
+      });
+    }
+
+    // Generate signed URL (valid for 1 hour)
+    const [signedUrl] = await file.getSignedUrl({
+      action: 'read',
+      expires: Date.now() + 60 * 60 * 1000, // 1 hour
+    });
+
+    // Redirect to signed URL or stream the image
+    // Using redirect for simplicity and performance
+    res.redirect(signedUrl);
+
+  } catch (error) {
+    console.error('Error serving image:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to serve image',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// API supports POST / (create) and GET /:id/image (secure image access)
 
   return router;
 };
