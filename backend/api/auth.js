@@ -339,11 +339,9 @@ async function sendPinEmail(toEmail, subject, body, isHtml = false) {
     template_id: process.env.EMAILJS_PIN_TEMPLATE_ID || process.env.EMAILJS_TEMPLATE_ID, // PIN template for auth, fallback to general
     user_id: process.env.EMAILJS_PUBLIC_KEY,
     accessToken: process.env.EMAILJS_PRIVATE_KEY, // Required for EmailJS API
-    to_email: toEmail, // Try setting recipient at top level too
     template_params: {
-      to_email: toEmail,
-      recipient: toEmail,
-      email: toEmail,     // Template expects {{email}}
+      email: toEmail,     // Template expects {{email}} in To Email field
+      reply_to: toEmail,  // Add reply_to to match template
       subject: subject,
       message: body,
       from_name: process.env.EMAIL_FROM_NAME || 'Wildlife Tracker',
