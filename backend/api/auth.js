@@ -334,6 +334,10 @@ router.post('/verify-pin', async (req, res) => {
 // Helper function to send PIN emails (adapted from existing email service)
 // Note: Uses EMAILJS_PIN_TEMPLATE_ID for PIN auth, EMAILJS_TEMPLATE_ID is for poaching notifications
 async function sendPinEmail(toEmail, subject, body, isHtml = false) {
+  // Extract PIN from HTML body for template variable
+  const pinMatch = body.match(/pin-code[^>]*>(\d{6})</);
+  const pinCode = pinMatch ? pinMatch[1] : 'ERROR';
+
   const emailData = {
     service_id: process.env.EMAILJS_SERVICE_ID,
     template_id: process.env.EMAILJS_PIN_TEMPLATE_ID || process.env.EMAILJS_TEMPLATE_ID, // PIN template for auth, fallback to general
@@ -341,6 +345,7 @@ async function sendPinEmail(toEmail, subject, body, isHtml = false) {
     accessToken: process.env.EMAILJS_PRIVATE_KEY, // Required for EmailJS API
     template_params: {
       email: toEmail,     // Template expects {{email}} in To Email field
+      pin: pinCode,      // ✅ Add PIN variable for template
       reply_to: toEmail,  // Add reply_to to match template
       subject: subject,
       message: body,
