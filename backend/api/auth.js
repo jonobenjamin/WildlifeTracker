@@ -32,7 +32,9 @@ function hashPin(pin) {
 // Email PIN request endpoint
 router.post('/request-pin', async (req, res) => {
   try {
+    console.log('Request body:', req.body);
     const { email, name } = req.body;
+    console.log('Extracted email:', email, 'name:', name);
 
     if (!email || !name) {
       return res.status(400).json({
