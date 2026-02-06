@@ -253,9 +253,11 @@ router.post('/request-pin', async (req, res) => {
 // PIN verification endpoint
 router.post('/verify-pin', async (req, res) => {
   try {
+    console.log('PIN verification request received:', { email: req.body.email, hasPin: !!req.body.pin });
     const { email, pin } = req.body;
 
     if (!email || !pin) {
+      console.log('Missing email or PIN');
       return res.status(400).json({
         success: false,
         message: 'Email and PIN are required'
@@ -302,6 +304,7 @@ router.post('/verify-pin', async (req, res) => {
     }
 
     // PIN is valid - create custom token
+    console.log('Creating Firebase custom token...');
     const uid = `email_${emailKey.replace(/[^a-zA-Z0-9]/g, '_')}`;
     const additionalClaims = {
       email: emailKey,
@@ -309,18 +312,23 @@ router.post('/verify-pin', async (req, res) => {
       provider: 'email_pin'
     };
 
+    console.log('Token details:', { uid, claims: additionalClaims });
     const customToken = await admin.auth().createCustomToken(uid, additionalClaims);
+    console.log('Custom token created successfully');
 
     // Clean up used PIN
     pinStore.delete(emailKey);
 
     console.log(`PIN verified for ${email}, created custom token for ${uid}`);
 
-    res.json({
+    const responseData = {
       success: true,
       customToken,
       name: storedData.name
-    });
+    };
+    console.log('Sending response:', { success: true, hasToken: !!customToken, name: storedData.name });
+
+    res.json(responseData);
 
   } catch (error) {
     console.error('PIN verification error:', error);
