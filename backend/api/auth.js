@@ -339,14 +339,29 @@ async function sendPinEmail(toEmail, subject, body, isHtml = false) {
     template_id: process.env.EMAILJS_PIN_TEMPLATE_ID || process.env.EMAILJS_TEMPLATE_ID, // PIN template for auth, fallback to general
     user_id: process.env.EMAILJS_PUBLIC_KEY,
     accessToken: process.env.EMAILJS_PRIVATE_KEY, // Required for EmailJS API
+    to_email: toEmail, // Try setting recipient at top level too
     template_params: {
       to_email: toEmail,
+      recipient: toEmail,
+      email: toEmail,     // Template expects {{email}}
       subject: subject,
       message: body,
       from_name: process.env.EMAIL_FROM_NAME || 'Wildlife Tracker',
       html_content: isHtml ? body : undefined
     }
   };
+
+  console.log('EmailJS request data:', {
+    service_id: emailData.service_id,
+    template_id: emailData.template_id,
+    user_id: emailData.user_id ? '***' : 'MISSING',
+    accessToken: emailData.accessToken ? '***' : 'MISSING',
+    to_email: emailData.to_email, // Check if this field exists
+    template_params: {
+      ...emailData.template_params,
+      message: emailData.template_params.message?.substring(0, 50) + '...'
+    }
+  });
 
   // Use EmailJS to send the email
   const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
