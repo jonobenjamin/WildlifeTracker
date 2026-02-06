@@ -5,7 +5,10 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "auth": "node auth-server.js",
     "dev": "nodemon server.js",
+    "dev-auth": "nodemon auth-server.js",
+    "test-auth": "node ../../../test-auth.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": ["wildlife", "tracker", "api", "firebase"],
