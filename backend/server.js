@@ -167,6 +167,7 @@ app.post('/test-file', testUpload, (req, res) => {
 // API Routes
 app.use('/api/observations', require('./api/observations')(db));
 app.use('/api/map', require('./api/map'));
+app.use('/api/auth', require('./api/auth'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
