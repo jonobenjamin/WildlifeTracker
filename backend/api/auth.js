@@ -336,6 +336,7 @@ async function sendPinEmail(toEmail, subject, body, isHtml = false) {
     service_id: process.env.EMAILJS_SERVICE_ID,
     template_id: process.env.EMAILJS_PIN_TEMPLATE_ID || process.env.EMAILJS_TEMPLATE_ID, // PIN template for auth, fallback to general
     user_id: process.env.EMAILJS_PUBLIC_KEY,
+    accessToken: process.env.EMAILJS_PRIVATE_KEY, // Required for EmailJS API
     template_params: {
       to_email: toEmail,
       subject: subject,
