@@ -66,21 +66,164 @@ router.post('/request-pin', async (req, res) => {
     // Send PIN via email using EmailJS (reuse existing notification service)
     try {
       const emailSubject = 'Your Wildlife Tracker PIN Code';
-      const emailBody = `
-Hello ${name.trim()},
 
-Your PIN code for Wildlife Tracker is: ${pin}
+      // HTML email template
+      const emailBodyHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Wildlife Tracker PIN</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #2e7d32;
+            padding-bottom: 20px;
+        }
+        .logo {
+            font-size: 28px;
+            font-weight: bold;
+            color: #2e7d32;
+            margin-bottom: 10px;
+        }
+        .tagline {
+            color: #666;
+            font-size: 16px;
+        }
+        .pin-container {
+            background: linear-gradient(135deg, #2e7d32, #4caf50);
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            margin: 30px 0;
+            color: white;
+        }
+        .pin-label {
+            font-size: 14px;
+            margin-bottom: 10px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .pin-code {
+            font-size: 36px;
+            font-weight: bold;
+            letter-spacing: 8px;
+            margin: 10px 0;
+            font-family: 'Courier New', monospace;
+        }
+        .pin-note {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-top: 15px;
+        }
+        .content {
+            margin: 30px 0;
+            line-height: 1.7;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #856404;
+        }
+        .warning strong {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .footer {
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+            margin-top: 40px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+        .security-note {
+            background: #e8f5e8;
+            border-left: 4px solid #2e7d32;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .contact {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">🦌 Wildlife Tracker</div>
+            <div class="tagline">Field Observation Platform</div>
+        </div>
 
-This code will expire in 15 minutes.
+        <div class="content">
+            <h2>Hello ${name.trim()}!</h2>
 
-If you didn't request this code, please ignore this email.
+            <p>Welcome to Wildlife Tracker. To complete your sign-in, please use the verification PIN below:</p>
 
-Best regards,
-Wildlife Tracker Team
-      `;
+            <div class="pin-container">
+                <div class="pin-label">Your Verification PIN</div>
+                <div class="pin-code">${pin}</div>
+                <div class="pin-note">Valid for 15 minutes</div>
+            </div>
+
+            <div class="security-note">
+                <strong>🔒 Security Notice:</strong> This PIN is unique to your email address and will expire in 15 minutes. Do not share this PIN with anyone.
+            </div>
+
+            <div class="warning">
+                <strong>⚠️ Important:</strong> If you didn't request this PIN, please ignore this email. Your account remains secure.
+            </div>
+
+            <p>
+                Enter this PIN in the Wildlife Tracker app to complete your authentication.
+                This helps us ensure that only authorized field users can access the observation platform.
+            </p>
+
+            <p>
+                If you have any questions or need assistance, please contact your system administrator.
+            </p>
+        </div>
+
+        <div class="footer">
+            <div class="contact">
+                <strong>Wildlife Tracker System</strong><br>
+                Field observation and conservation platform
+            </div>
+
+            <p style="margin-top: 20px; font-size: 12px; color: #999;">
+                This is an automated message from Wildlife Tracker.<br>
+                Please do not reply to this email.
+            </p>
+        </div>
+    </div>
+</body>
+</html>`;
 
       // Use existing email service (adapted for PIN sending)
-      await sendPinEmail(email, emailSubject, emailBody);
+      await sendPinEmail(email, emailSubject, emailBodyHtml, true); // true = HTML email
 
       console.log(`PIN sent to ${email}: ${pin}`);
     } catch (emailError) {
@@ -187,16 +330,18 @@ router.post('/verify-pin', async (req, res) => {
 });
 
 // Helper function to send PIN emails (adapted from existing email service)
-async function sendPinEmail(toEmail, subject, body) {
+// Note: Uses EMAILJS_PIN_TEMPLATE_ID for PIN auth, EMAILJS_TEMPLATE_ID is for poaching notifications
+async function sendPinEmail(toEmail, subject, body, isHtml = false) {
   const emailData = {
     service_id: process.env.EMAILJS_SERVICE_ID,
-    template_id: process.env.EMAILJS_TEMPLATE_ID,
+    template_id: process.env.EMAILJS_PIN_TEMPLATE_ID || process.env.EMAILJS_TEMPLATE_ID, // PIN template for auth, fallback to general
     user_id: process.env.EMAILJS_PUBLIC_KEY,
     template_params: {
       to_email: toEmail,
       subject: subject,
       message: body,
-      from_name: process.env.EMAIL_FROM_NAME || 'Wildlife Tracker'
+      from_name: process.env.EMAIL_FROM_NAME || 'Wildlife Tracker',
+      html_content: isHtml ? body : undefined
     }
   };
 
@@ -210,8 +355,13 @@ async function sendPinEmail(toEmail, subject, body) {
   });
 
   if (!response.ok) {
-    throw new Error(`EmailJS error: ${response.status}`);
+    const errorText = await response.text();
+    console.error('EmailJS error response:', errorText);
+    throw new Error(`EmailJS error: ${response.status} - ${errorText}`);
   }
+
+  const result = await response.json();
+  console.log('EmailJS success:', result);
 }
 
 module.exports = router;
