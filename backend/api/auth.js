@@ -376,7 +376,8 @@ async function sendPinEmail(toEmail, subject, body, isHtml = false) {
     throw new Error(`EmailJS error: ${response.status} - ${errorText}`);
   }
 
-  const result = await response.json();
+  // EmailJS returns "OK" as plain text on success
+  const result = await response.text();
   console.log('EmailJS success:', result);
 }
 
