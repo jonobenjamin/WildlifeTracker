@@ -1,0 +1,26 @@
+{
+  "name": "wildlife-auth-server",
+  "version": "1.0.0",
+  "description": "Authentication server for Wildlife Tracker PWA",
+  "main": "auth-server.js",
+  "scripts": {
+    "start": "node auth-server.js",
+    "dev": "nodemon auth-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "firebase-admin": "^11.11.1",
+    "@emailjs/nodejs": "^4.0.1",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "keywords": ["auth", "firebase", "express", "wildlife"],
+  "author": "Wildlife Tracker",
+  "license": "MIT"
+}
