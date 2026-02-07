@@ -31,14 +31,23 @@ async function checkUserRevoked(db, userIdentifier) {
     if (!userDoc.exists) {
       console.log('🔍 User document not found by ID/email, searching all users...');
       const usersSnapshot = await db.collection('users').get();
-      usersSnapshot.forEach(doc => {
+      for (const doc of usersSnapshot.docs) {
         const data = doc.data();
-        if (data.email === userIdentifier || data.uid === userIdentifier) {
+        // Check multiple possible matches
+        if (data.email === userIdentifier ||
+            data.uid === userIdentifier ||
+            data.name === userIdentifier ||
+            (data.name && userIdentifier.includes(data.name)) ||
+            (data.email && userIdentifier.includes(data.email.split('@')[0]))) {
           userDoc = doc;
-          console.log('✅ Found user by searching - doc ID:', doc.id);
-          return;
+          console.log('✅ Found user by searching - doc ID:', doc.id, 'matched by:', {
+            email: data.email === userIdentifier,
+            uid: data.uid === userIdentifier,
+            name: data.name === userIdentifier
+          });
+          break;
         }
-      });
+      }
     }
 
     if (!userDoc.exists) {
