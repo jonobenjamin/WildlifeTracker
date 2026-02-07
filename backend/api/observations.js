@@ -5,6 +5,39 @@ const { sendPoachingIncidentNotifications, isPoachingIncident } = require('../se
 
 const router = express.Router();
 
+// Check if user is revoked
+async function checkUserRevoked(db, userIdentifier) {
+  try {
+    console.log('🔍 Checking if user is revoked:', userIdentifier);
+
+    // Try to find user by UID first, then by email pattern
+    let userDoc;
+    try {
+      userDoc = await db.collection('users').doc(userIdentifier).get();
+    } catch (error) {
+      // If direct UID lookup fails, try email pattern
+      if (userIdentifier.includes('@')) {
+        const emailKey = userIdentifier.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
+        userDoc = await db.collection('users').doc('email_' + emailKey).get();
+      }
+    }
+
+    if (!userDoc.exists) {
+      console.log('⚠️ User document not found - allowing submission for new user');
+      return false; // Allow new users
+    }
+
+    const userData = userDoc.data();
+    const isRevoked = userData.status === 'revoked';
+
+    console.log('👤 User status check - status:', userData.status, 'revoked:', isRevoked);
+    return isRevoked;
+  } catch (error) {
+    console.error('❌ Error checking user status:', error);
+    return false; // Allow submission if check fails (fail-safe)
+  }
+}
+
 // Configure multer for image uploads
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -161,6 +194,19 @@ router.post('/', upload.single('image'), async (req, res) => {
       timestamp,
       user
     } = req.body;
+
+    // Check if user is revoked before allowing submission
+    if (user) {
+      const isRevoked = await checkUserRevoked(db, user);
+      if (isRevoked) {
+        console.log('🚫 BLOCKED: Revoked user attempted to submit observation');
+        return res.status(403).json({
+          success: false,
+          error: 'Access denied',
+          message: 'Your account has been suspended. Please contact an administrator.'
+        });
+      }
+    }
 
     // Validate required fields
     if (!category) {
