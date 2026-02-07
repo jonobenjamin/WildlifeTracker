@@ -8,32 +8,58 @@ const router = express.Router();
 // Check if user is revoked
 async function checkUserRevoked(db, userIdentifier) {
   try {
-    console.log('🔍 Checking if user is revoked:', userIdentifier);
+    console.log('🔍 Checking if user is revoked - received identifier:', userIdentifier);
 
-    // Try to find user by UID first, then by email pattern
-    let userDoc;
-    try {
-      userDoc = await db.collection('users').doc(userIdentifier).get();
-    } catch (error) {
-      // If direct UID lookup fails, try email pattern
-      if (userIdentifier.includes('@')) {
-        const emailKey = userIdentifier.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
-        userDoc = await db.collection('users').doc('email_' + emailKey).get();
-      }
+    if (!userIdentifier) {
+      console.log('⚠️ No user identifier provided - allowing submission');
+      return false;
+    }
+
+    // First, try to find user by exact document ID
+    let userDoc = await db.collection('users').doc(userIdentifier).get();
+
+    // If not found and looks like email, try email pattern
+    if (!userDoc.exists && userIdentifier.includes('@')) {
+      console.log('📧 Trying email pattern lookup for:', userIdentifier);
+      const emailKey = userIdentifier.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
+      const emailDocId = 'email_' + emailKey;
+      console.log('📧 Looking for document ID:', emailDocId);
+      userDoc = await db.collection('users').doc(emailDocId).get();
+    }
+
+    // If still not found, try to search all users (less efficient but comprehensive)
+    if (!userDoc.exists) {
+      console.log('🔍 User document not found by ID/email, searching all users...');
+      const usersSnapshot = await db.collection('users').get();
+      usersSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.email === userIdentifier || data.uid === userIdentifier) {
+          userDoc = doc;
+          console.log('✅ Found user by searching - doc ID:', doc.id);
+          return;
+        }
+      });
     }
 
     if (!userDoc.exists) {
-      console.log('⚠️ User document not found - allowing submission for new user');
+      console.log('⚠️ User document not found after all attempts - allowing submission for new user');
+      console.log('   Searched for:', userIdentifier);
       return false; // Allow new users
     }
 
     const userData = userDoc.data();
     const isRevoked = userData.status === 'revoked';
 
-    console.log('👤 User status check - status:', userData.status, 'revoked:', isRevoked);
+    console.log('👤 User status check result:');
+    console.log('   - Document ID:', userDoc.id);
+    console.log('   - User email:', userData.email);
+    console.log('   - User status:', userData.status);
+    console.log('   - Is revoked:', isRevoked);
+
     return isRevoked;
   } catch (error) {
     console.error('❌ Error checking user status:', error);
+    console.error('❌ Error details:', error.message);
     return false; // Allow submission if check fails (fail-safe)
   }
 }
@@ -195,8 +221,14 @@ router.post('/', upload.single('image'), async (req, res) => {
       user
     } = req.body;
 
+    console.log('📝 New observation submission:');
+    console.log('   - Category:', category);
+    console.log('   - User identifier:', user);
+    console.log('   - User type:', typeof user);
+
     // Check if user is revoked before allowing submission
     if (user) {
+      console.log('🛡️ Checking user revocation status...');
       const isRevoked = await checkUserRevoked(db, user);
       if (isRevoked) {
         console.log('🚫 BLOCKED: Revoked user attempted to submit observation');
@@ -206,6 +238,9 @@ router.post('/', upload.single('image'), async (req, res) => {
           message: 'Your account has been suspended. Please contact an administrator.'
         });
       }
+      console.log('✅ User is active - allowing submission');
+    } else {
+      console.log('⚠️ No user identifier in submission - allowing (might be anonymous)');
     }
 
     // Validate required fields
