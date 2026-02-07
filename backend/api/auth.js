@@ -253,7 +253,7 @@ router.post('/request-pin', async (req, res) => {
 // PIN verification endpoint
 router.post('/verify-pin', async (req, res) => {
   try {
-    console.log('PIN verification request received:', { email: req.body.email, hasPin: !!req.body.pin });
+    console.log('🔍 PIN verification request received:', { email: req.body.email, pin: req.body.pin });
     const { email, pin } = req.body;
 
     if (!email || !pin) {
@@ -265,9 +265,12 @@ router.post('/verify-pin', async (req, res) => {
     }
 
     const emailKey = email.toLowerCase();
+    console.log('Looking up PIN for email:', emailKey);
     const storedData = pinStore.get(emailKey);
+    console.log('Stored data found:', !!storedData);
 
     if (!storedData) {
+      console.log('PIN not found or expired for:', emailKey);
       return res.status(400).json({
         success: false,
         message: 'PIN not found or expired. Please request a new PIN.'
@@ -294,14 +297,20 @@ router.post('/verify-pin', async (req, res) => {
     }
 
     // Verify PIN
+    console.log('Verifying PIN for:', emailKey);
     const hashedInputPin = hashPin(pin);
+    console.log('PIN hash comparison:', hashedInputPin === storedData.pin ? 'MATCH' : 'NO MATCH');
+
     if (hashedInputPin !== storedData.pin) {
       storedData.attempts++;
+      console.log('Invalid PIN attempt', storedData.attempts, 'for:', emailKey);
       return res.status(400).json({
         success: false,
         message: `Invalid PIN. ${5 - storedData.attempts} attempts remaining.`
       });
     }
+
+    console.log('PIN verified successfully for:', emailKey);
 
     // PIN is valid - create custom token
     console.log('Creating Firebase custom token...');
