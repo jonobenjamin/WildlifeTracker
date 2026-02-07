@@ -92,7 +92,7 @@ app.set('trust proxy', 1); // Trust Vercel proxy for rate limiting
 app.use((req, res, next) => {
   const allowedOrigins = process.env.ALLOWED_ORIGINS ?
     process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim()) :
-    ['http://localhost:3000', 'http://localhost:5000'];
+    ['http://localhost:3000', 'http://localhost:5000', 'https://jonobenjamin.github.io'];
 
   const origin = req.headers.origin;
 
@@ -102,7 +102,7 @@ app.use((req, res, next) => {
   }
 
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-api-key');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-api-key, x-admin-key');
   res.header('Access-Control-Allow-Credentials', 'true');
 
   // Handle preflight requests
