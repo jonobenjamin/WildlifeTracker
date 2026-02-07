@@ -3,43 +3,35 @@ const admin = require('firebase-admin');
 
 const router = express.Router();
 
-// Middleware to check for admin authentication (API key based)
+// Middleware to check for admin authentication (API key based) - ALWAYS ENABLED
 const requireAdmin = (req, res, next) => {
-  console.log('🔍 Admin auth middleware triggered');
-  console.log('🔍 Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('🔐 ADMIN AUTH CHECK - Request to:', req.originalUrl);
 
   // Check for admin API key in header (same as map dashboard uses)
   const adminKey = req.headers['x-api-key'];
 
-  console.log('🔍 Admin key from header:', adminKey ? '***' + adminKey.slice(-4) : 'none');
-
   // Use environment variable for admin key, fallback to a default for development
   const expectedAdminKey = process.env.ADMIN_API_KEY || 'wildlife_admin_2024';
-  console.log('🔍 Expected admin key ends with:', '***' + expectedAdminKey.slice(-4));
 
-  // For now, temporarily disable auth to test if API works
-  console.log('⚠️ TEMPORARILY DISABLING ADMIN AUTH FOR DEBUGGING');
-  req.adminUid = 'admin_user';
-  next();
+  console.log('🔑 Received API key:', adminKey ? '***' + adminKey.slice(-4) : 'NONE');
+  console.log('🔑 Expected API key ends with:', '***' + expectedAdminKey.slice(-4));
 
-  /*
   if (!adminKey || adminKey !== expectedAdminKey) {
-    console.log('❌ Admin authentication failed');
+    console.log('🚫 ADMIN AUTH FAILED - Access denied');
     return res.status(401).json({
       success: false,
-      message: 'Admin authentication required',
+      message: 'Admin authentication required - invalid or missing API key',
       debug: {
-        receivedKey: adminKey ? true : false,
+        received: !!adminKey,
         expectedEndsWith: expectedAdminKey.slice(-4)
       }
     });
   }
 
-  console.log('✅ Admin authentication successful');
-  // Set a mock admin UID for logging purposes
+  console.log('✅ ADMIN AUTH SUCCESSFUL - Access granted');
+  // Set admin UID for logging purposes
   req.adminUid = 'admin_user';
   next();
-  */
 };
 
 // Get all users
