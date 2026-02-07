@@ -63,8 +63,8 @@ router.get('/users', requireAdmin, async (req, res) => {
         phone: userData.phone,
         role: userData.role || 'user',
         status: userData.status || 'active',
-        registeredAt: userData.registeredAt,
-        lastLogin: userData.lastLogin
+        registeredAt: userData.registeredAt?.toDate?.() ? userData.registeredAt.toDate().toISOString() : userData.registeredAt,
+        lastLogin: userData.lastLogin?.toDate?.() ? userData.lastLogin.toDate().toISOString() : userData.lastLogin
       });
     });
 
