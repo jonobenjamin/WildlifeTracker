@@ -38,6 +38,7 @@ const requireAdmin = (req, res, next) => {
 router.get('/users', requireAdmin, async (req, res) => {
   try {
     const db = admin.firestore();
+    console.log('📊 Admin API - Database being used:', db._settings?.databaseId || 'default');
 
     // Get all users from the users collection
     const usersSnapshot = await db.collection('users')
