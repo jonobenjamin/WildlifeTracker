@@ -134,6 +134,7 @@ app.get('/', (req, res) => {
       health: '/health',
       observations: '/api/observations (POST only - write-only)',
       images: '/api/observations/:id/image (secure image access)',
+      waterMonitoring: '/api/water-monitoring (GET/POST - water quality data)',
       testFile: '/test-file (POST - test file upload)'
     },
     docs: 'See README.md for API documentation'
@@ -169,6 +170,7 @@ app.use('/api/observations', require('./api/observations')(db));
 app.use('/api/map', require('./api/map'));
 app.use('/api/auth', require('./api/auth'));
 app.use('/api/admin', require('./api/admin'));
+app.use('/api/water-monitoring', require('./api/water-monitoring')(db));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
