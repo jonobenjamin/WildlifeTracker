@@ -140,11 +140,18 @@ router.get('/', async (req, res) => {
       // Add category-specific data (without sensitive information)
       if (data.category === 'Sighting' && data.animal) {
         observation.animal = data.animal;
+        // Add new animal-specific fields
+        if (data.pride_name) observation.pride_name = data.pride_name;
+        if (data.leopard_name) observation.leopard_name = data.leopard_name;
+        if (data.animal_activity) observation.animal_activity = data.animal_activity;
+        if (data.animal_age) observation.animal_age = data.animal_age;
       }
       if (data.category === 'Incident' && data.incident_type) {
         observation.incident_type = data.incident_type;
         if (data.poaching_type) {
           observation.poaching_type = data.poaching_type;
+          // Add poached animal for carcass incidents
+          if (data.poached_animal) observation.poached_animal = data.poached_animal;
         }
       }
       if (data.category === 'Maintenance' && data.maintenance_type) {
@@ -227,13 +234,29 @@ router.post('/', upload.single('image'), async (req, res) => {
       latitude,
       longitude,
       timestamp,
-      user
+      user,
+      // New animal-specific fields
+      pride_name,
+      leopard_name,
+      animal_activity,
+      animal_age,
+      // New poaching-specific fields
+      poached_animal,
+      poaching_image,
+      poaching_image_name
     } = req.body;
 
     console.log('📝 New observation submission:');
     console.log('   - Category:', category);
     console.log('   - User identifier:', user);
     console.log('   - User type:', typeof user);
+
+    // Log new fields for debugging
+    if (pride_name) console.log('   - Pride name:', pride_name);
+    if (leopard_name) console.log('   - Leopard name:', leopard_name);
+    if (animal_activity) console.log('   - Animal activity:', animal_activity);
+    if (animal_age) console.log('   - Animal age:', animal_age);
+    if (poached_animal) console.log('   - Poached animal:', poached_animal);
 
     // Check if user is revoked before allowing submission
     if (user) {
@@ -283,7 +306,7 @@ router.post('/', upload.single('image'), async (req, res) => {
     }
 
     // Validate poaching type for poaching incidents
-    const validPoachingTypes = ['Carcass', 'Snare', 'Poacher'];
+    const validPoachingTypes = ['Carcass', 'Snare', 'Poacher', 'Fishing net/equipment'];
     if (category === 'Incident' && incident_type && incident_type.toLowerCase().includes('poach')) {
       if (!poaching_type || !validPoachingTypes.includes(poaching_type)) {
         return res.status(400).json({
@@ -301,10 +324,21 @@ router.post('/', upload.single('image'), async (req, res) => {
     };
 
     // Add category-specific data
-    if (category === 'Sighting') observationData.animal = animal;
+    if (category === 'Sighting') {
+      observationData.animal = animal;
+      // Add new animal-specific fields
+      if (pride_name) observationData.pride_name = pride_name;
+      if (leopard_name) observationData.leopard_name = leopard_name;
+      if (animal_activity) observationData.animal_activity = animal_activity;
+      if (animal_age) observationData.animal_age = animal_age;
+    }
     if (category === 'Incident') {
       observationData.incident_type = incident_type;
-      if (poaching_type) observationData.poaching_type = poaching_type;
+      if (poaching_type) {
+        observationData.poaching_type = poaching_type;
+        // Add poached animal for carcass incidents
+        if (poached_animal) observationData.poached_animal = poached_animal;
+      }
     }
     if (category === 'Maintenance') observationData.maintenance_type = maintenance_type;
 
