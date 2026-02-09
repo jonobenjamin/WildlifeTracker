@@ -225,26 +225,25 @@ router.post('/', upload.single('image'), async (req, res) => {
       console.log('No file received - check if frontend is sending image as multipart/form-data');
     }
 
-    const {
-      category,
-      animal,
-      incident_type,
-      poaching_type,
-      maintenance_type,
-      latitude,
-      longitude,
-      timestamp,
-      user,
-      // New animal-specific fields
-      pride_name,
-      leopard_name,
-      animal_activity,
-      animal_age,
-      // New poaching-specific fields
-      poached_animal,
-      poaching_image,
-      poaching_image_name
-    } = req.body;
+    // Extract required fields
+    const category = req.body.category;
+    const animal = req.body.animal;
+    const incident_type = req.body.incident_type;
+    const poaching_type = req.body.poaching_type;
+    const maintenance_type = req.body.maintenance_type;
+    const latitude = req.body.latitude;
+    const longitude = req.body.longitude;
+    const timestamp = req.body.timestamp;
+    const user = req.body.user;
+
+    // New fields (may be undefined)
+    const pride_name = req.body.pride_name;
+    const leopard_name = req.body.leopard_name;
+    const animal_activity = req.body.animal_activity;
+    const animal_age = req.body.animal_age;
+    const poached_animal = req.body.poached_animal;
+    const poaching_image = req.body.poaching_image;
+    const poaching_image_name = req.body.poaching_image_name;
 
     console.log('📝 New observation submission:');
     console.log('   - Category:', category);
@@ -329,18 +328,35 @@ router.post('/', upload.single('image'), async (req, res) => {
       observationData.animal = animal;
       // Add new animal-specific fields (required for sightings)
       console.log('🐾 Adding sighting data for animal:', animal);
+
+      // Ensure required fields exist
+      if (!animal_activity) {
+        console.error('❌ Missing required field: animal_activity');
+        return res.status(400).json({
+          success: false,
+          error: 'Animal activity is required for sightings'
+        });
+      }
+      if (!animal_age) {
+        console.error('❌ Missing required field: animal_age');
+        return res.status(400).json({
+          success: false,
+          error: 'Animal age is required for sightings'
+        });
+      }
+
       observationData.animal_activity = animal_activity;
       observationData.animal_age = animal_age;
       console.log('   ✅ Added animal_activity:', animal_activity);
       console.log('   ✅ Added animal_age:', animal_age);
 
       // Add conditional fields
-      if (pride_name) {
-        observationData.pride_name = pride_name;
+      if (pride_name && pride_name.trim()) {
+        observationData.pride_name = pride_name.trim();
         console.log('   ✅ Added pride_name:', pride_name);
       }
-      if (leopard_name) {
-        observationData.leopard_name = leopard_name;
+      if (leopard_name && leopard_name.trim()) {
+        observationData.leopard_name = leopard_name.trim();
         console.log('   ✅ Added leopard_name:', leopard_name);
       }
     }
@@ -352,6 +368,13 @@ router.post('/', upload.single('image'), async (req, res) => {
         console.log('   ✅ Added poaching_type:', poaching_type);
         // Add poached animal for carcass incidents (required)
         if (poaching_type === 'Carcass') {
+          if (!poached_animal) {
+            console.error('❌ Missing required field: poached_animal for carcass');
+            return res.status(400).json({
+              success: false,
+              error: 'Poached animal is required for carcass incidents'
+            });
+          }
           observationData.poached_animal = poached_animal;
           console.log('   ✅ Added poached_animal:', poached_animal);
         }
@@ -433,9 +456,17 @@ router.post('/', upload.single('image'), async (req, res) => {
     console.log('🔍 Final observationData before saving to Firestore:');
     console.log(JSON.stringify(observationData, null, 2));
 
-    const docRef = await db.collection('observations').add(observationData);
-
-    console.log('Successfully saved to Firestore with ID:', docRef.id);
+    try {
+      const docRef = await db.collection('observations').add(observationData);
+      console.log('Successfully saved to Firestore with ID:', docRef.id);
+    } catch (firestoreError) {
+      console.error('❌ Firestore save failed:', firestoreError);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to save to database',
+        details: process.env.NODE_ENV === 'development' ? firestoreError.message : undefined
+      });
+    }
 
     // Send email notification if this is a poaching incident
     const savedObservation = {
