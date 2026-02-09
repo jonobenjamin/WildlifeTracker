@@ -140,18 +140,11 @@ router.get('/', async (req, res) => {
       // Add category-specific data (without sensitive information)
       if (data.category === 'Sighting' && data.animal) {
         observation.animal = data.animal;
-        // Add new animal-specific fields
-        if (data.pride_name) observation.pride_name = data.pride_name;
-        if (data.leopard_name) observation.leopard_name = data.leopard_name;
-        if (data.animal_activity) observation.animal_activity = data.animal_activity;
-        if (data.animal_age) observation.animal_age = data.animal_age;
       }
       if (data.category === 'Incident' && data.incident_type) {
         observation.incident_type = data.incident_type;
         if (data.poaching_type) {
           observation.poaching_type = data.poaching_type;
-          // Add poached animal for carcass incidents
-          if (data.poached_animal) observation.poached_animal = data.poached_animal;
         }
       }
       if (data.category === 'Maintenance' && data.maintenance_type) {
@@ -225,38 +218,22 @@ router.post('/', upload.single('image'), async (req, res) => {
       console.log('No file received - check if frontend is sending image as multipart/form-data');
     }
 
-    // Extract required fields
-    const category = req.body.category;
-    const animal = req.body.animal;
-    const incident_type = req.body.incident_type;
-    const poaching_type = req.body.poaching_type;
-    const maintenance_type = req.body.maintenance_type;
-    const latitude = req.body.latitude;
-    const longitude = req.body.longitude;
-    const timestamp = req.body.timestamp;
-    const user = req.body.user;
-
-    // New fields (may be undefined)
-    const pride_name = req.body.pride_name;
-    const leopard_name = req.body.leopard_name;
-    const animal_activity = req.body.animal_activity;
-    const animal_age = req.body.animal_age;
-    const poached_animal = req.body.poached_animal;
-    const poaching_image = req.body.poaching_image;
-    const poaching_image_name = req.body.poaching_image_name;
+    const {
+      category,
+      animal,
+      incident_type,
+      poaching_type,
+      maintenance_type,
+      latitude,
+      longitude,
+      timestamp,
+      user
+    } = req.body;
 
     console.log('📝 New observation submission:');
     console.log('   - Category:', category);
     console.log('   - User identifier:', user);
     console.log('   - User type:', typeof user);
-
-    // Log new fields for debugging
-    console.log('🆕 New fields received:');
-    console.log('   - Pride name:', pride_name || 'not provided');
-    console.log('   - Leopard name:', leopard_name || 'not provided');
-    console.log('   - Animal activity:', animal_activity || 'not provided');
-    console.log('   - Animal age:', animal_age || 'not provided');
-    console.log('   - Poached animal:', poached_animal || 'not provided');
 
     // Check if user is revoked before allowing submission
     if (user) {
@@ -306,7 +283,7 @@ router.post('/', upload.single('image'), async (req, res) => {
     }
 
     // Validate poaching type for poaching incidents
-    const validPoachingTypes = ['Carcass', 'Snare', 'Poacher', 'Fishing net/equipment'];
+    const validPoachingTypes = ['Carcass', 'Snare', 'Poacher'];
     if (category === 'Incident' && incident_type && incident_type.toLowerCase().includes('poach')) {
       if (!poaching_type || !validPoachingTypes.includes(poaching_type)) {
         return res.status(400).json({
@@ -324,50 +301,10 @@ router.post('/', upload.single('image'), async (req, res) => {
     };
 
     // Add category-specific data
-    if (category === 'Sighting') {
-      observationData.animal = animal;
-      // Add new animal-specific fields (required for sightings)
-      console.log('🐾 Adding sighting data for animal:', animal);
-
-      // Log received fields for debugging
-      console.log('🐾 Received sighting fields:');
-      console.log('   - animal_activity:', animal_activity, 'type:', typeof animal_activity);
-      console.log('   - animal_age:', animal_age, 'type:', typeof animal_age);
-
-      // For now, make these optional to avoid 400 errors during testing
-      // TODO: Make required once Flutter app is confirmed to send them
-
-      if (animal_activity) {
-        observationData.animal_activity = animal_activity;
-        console.log('   ✅ Added animal_activity:', animal_activity);
-      }
-      if (animal_age) {
-        observationData.animal_age = animal_age;
-        console.log('   ✅ Added animal_age:', animal_age);
-      }
-
-      // Add conditional fields
-      if (pride_name && pride_name.trim()) {
-        observationData.pride_name = pride_name.trim();
-        console.log('   ✅ Added pride_name:', pride_name);
-      }
-      if (leopard_name && leopard_name.trim()) {
-        observationData.leopard_name = leopard_name.trim();
-        console.log('   ✅ Added leopard_name:', leopard_name);
-      }
-    }
+    if (category === 'Sighting') observationData.animal = animal;
     if (category === 'Incident') {
       observationData.incident_type = incident_type;
-      console.log('🚨 Adding incident data:', incident_type);
-      if (poaching_type) {
-        observationData.poaching_type = poaching_type;
-        console.log('   ✅ Added poaching_type:', poaching_type);
-        // Add poached animal for carcass incidents
-        if (poaching_type === 'Carcass' && poached_animal) {
-          observationData.poached_animal = poached_animal;
-          console.log('   ✅ Added poached_animal:', poached_animal);
-        }
-      }
+      if (poaching_type) observationData.poaching_type = poaching_type;
     }
     if (category === 'Maintenance') observationData.maintenance_type = maintenance_type;
 
@@ -442,20 +379,11 @@ router.post('/', upload.single('image'), async (req, res) => {
       console.log('ℹ️ No image data found to upload');
     }
 
-    console.log('🔍 Final observationData before saving to Firestore:');
-    console.log(JSON.stringify(observationData, null, 2));
+    console.log('Attempting to save to Firestore:', observationData);
 
-    try {
-      const docRef = await db.collection('observations').add(observationData);
-      console.log('Successfully saved to Firestore with ID:', docRef.id);
-    } catch (firestoreError) {
-      console.error('❌ Firestore save failed:', firestoreError);
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to save to database',
-        details: process.env.NODE_ENV === 'development' ? firestoreError.message : undefined
-      });
-    }
+    const docRef = await db.collection('observations').add(observationData);
+
+    console.log('Successfully saved to Firestore with ID:', docRef.id);
 
     // Send email notification if this is a poaching incident
     const savedObservation = {
