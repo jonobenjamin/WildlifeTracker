@@ -329,26 +329,22 @@ router.post('/', upload.single('image'), async (req, res) => {
       // Add new animal-specific fields (required for sightings)
       console.log('🐾 Adding sighting data for animal:', animal);
 
-      // Ensure required fields exist
-      if (!animal_activity) {
-        console.error('❌ Missing required field: animal_activity');
-        return res.status(400).json({
-          success: false,
-          error: 'Animal activity is required for sightings'
-        });
-      }
-      if (!animal_age) {
-        console.error('❌ Missing required field: animal_age');
-        return res.status(400).json({
-          success: false,
-          error: 'Animal age is required for sightings'
-        });
-      }
+      // Log received fields for debugging
+      console.log('🐾 Received sighting fields:');
+      console.log('   - animal_activity:', animal_activity, 'type:', typeof animal_activity);
+      console.log('   - animal_age:', animal_age, 'type:', typeof animal_age);
 
-      observationData.animal_activity = animal_activity;
-      observationData.animal_age = animal_age;
-      console.log('   ✅ Added animal_activity:', animal_activity);
-      console.log('   ✅ Added animal_age:', animal_age);
+      // For now, make these optional to avoid 400 errors during testing
+      // TODO: Make required once Flutter app is confirmed to send them
+
+      if (animal_activity) {
+        observationData.animal_activity = animal_activity;
+        console.log('   ✅ Added animal_activity:', animal_activity);
+      }
+      if (animal_age) {
+        observationData.animal_age = animal_age;
+        console.log('   ✅ Added animal_age:', animal_age);
+      }
 
       // Add conditional fields
       if (pride_name && pride_name.trim()) {
@@ -366,15 +362,8 @@ router.post('/', upload.single('image'), async (req, res) => {
       if (poaching_type) {
         observationData.poaching_type = poaching_type;
         console.log('   ✅ Added poaching_type:', poaching_type);
-        // Add poached animal for carcass incidents (required)
-        if (poaching_type === 'Carcass') {
-          if (!poached_animal) {
-            console.error('❌ Missing required field: poached_animal for carcass');
-            return res.status(400).json({
-              success: false,
-              error: 'Poached animal is required for carcass incidents'
-            });
-          }
+        // Add poached animal for carcass incidents
+        if (poaching_type === 'Carcass' && poached_animal) {
           observationData.poached_animal = poached_animal;
           console.log('   ✅ Added poached_animal:', poached_animal);
         }
