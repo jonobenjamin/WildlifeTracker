@@ -110,7 +110,8 @@ router.get('/', async (req, res) => {
       query = query.where('location', '==', req.query.location);
     }
 
-    const snapshot = await query.orderBy('date', 'asc').get();
+    // Note: Removed orderBy to avoid composite index requirements in serverless environment
+    const snapshot = await query.get();
 
     const waterMonitoringData = [];
     snapshot.forEach(doc => {
@@ -131,6 +132,13 @@ router.get('/', async (req, res) => {
         timestamp: data.timestamp,
         user: data.user
       });
+    });
+
+    // Sort by date in ascending order (oldest first)
+    waterMonitoringData.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      return dateA - dateB;
     });
 
     console.log(`Successfully fetched ${waterMonitoringData.length} water monitoring records`);
