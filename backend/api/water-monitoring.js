@@ -236,9 +236,13 @@ router.post('/', async (req, res) => {
       location,
       location_name,
       date,
-      timestamp: new Date().toISOString(),
-      user: user // Add user information
+      timestamp: new Date().toISOString()
     };
+
+    // Only add user field if it has a valid value
+    if (user !== undefined && user !== null && user !== '') {
+      waterMonitoringData.user = user;
+    }
 
     // Add GPS if provided
     if (latitude !== undefined && longitude !== undefined) {
