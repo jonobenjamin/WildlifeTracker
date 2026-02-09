@@ -252,11 +252,12 @@ router.post('/', upload.single('image'), async (req, res) => {
     console.log('   - User type:', typeof user);
 
     // Log new fields for debugging
-    if (pride_name) console.log('   - Pride name:', pride_name);
-    if (leopard_name) console.log('   - Leopard name:', leopard_name);
-    if (animal_activity) console.log('   - Animal activity:', animal_activity);
-    if (animal_age) console.log('   - Animal age:', animal_age);
-    if (poached_animal) console.log('   - Poached animal:', poached_animal);
+    console.log('🆕 New fields received:');
+    console.log('   - Pride name:', pride_name || 'not provided');
+    console.log('   - Leopard name:', leopard_name || 'not provided');
+    console.log('   - Animal activity:', animal_activity || 'not provided');
+    console.log('   - Animal age:', animal_age || 'not provided');
+    console.log('   - Poached animal:', poached_animal || 'not provided');
 
     // Check if user is revoked before allowing submission
     if (user) {
@@ -327,17 +328,35 @@ router.post('/', upload.single('image'), async (req, res) => {
     if (category === 'Sighting') {
       observationData.animal = animal;
       // Add new animal-specific fields
-      if (pride_name) observationData.pride_name = pride_name;
-      if (leopard_name) observationData.leopard_name = leopard_name;
-      if (animal_activity) observationData.animal_activity = animal_activity;
-      if (animal_age) observationData.animal_age = animal_age;
+      console.log('🐾 Adding sighting data for animal:', animal);
+      if (pride_name) {
+        observationData.pride_name = pride_name;
+        console.log('   ✅ Added pride_name:', pride_name);
+      }
+      if (leopard_name) {
+        observationData.leopard_name = leopard_name;
+        console.log('   ✅ Added leopard_name:', leopard_name);
+      }
+      if (animal_activity) {
+        observationData.animal_activity = animal_activity;
+        console.log('   ✅ Added animal_activity:', animal_activity);
+      }
+      if (animal_age) {
+        observationData.animal_age = animal_age;
+        console.log('   ✅ Added animal_age:', animal_age);
+      }
     }
     if (category === 'Incident') {
       observationData.incident_type = incident_type;
+      console.log('🚨 Adding incident data:', incident_type);
       if (poaching_type) {
         observationData.poaching_type = poaching_type;
+        console.log('   ✅ Added poaching_type:', poaching_type);
         // Add poached animal for carcass incidents
-        if (poached_animal) observationData.poached_animal = poached_animal;
+        if (poached_animal) {
+          observationData.poached_animal = poached_animal;
+          console.log('   ✅ Added poached_animal:', poached_animal);
+        }
       }
     }
     if (category === 'Maintenance') observationData.maintenance_type = maintenance_type;
@@ -413,7 +432,8 @@ router.post('/', upload.single('image'), async (req, res) => {
       console.log('ℹ️ No image data found to upload');
     }
 
-    console.log('Attempting to save to Firestore:', observationData);
+    console.log('🔍 Final observationData before saving to Firestore:');
+    console.log(JSON.stringify(observationData, null, 2));
 
     const docRef = await db.collection('observations').add(observationData);
 
