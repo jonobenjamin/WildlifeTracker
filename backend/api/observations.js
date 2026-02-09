@@ -327,8 +327,14 @@ router.post('/', upload.single('image'), async (req, res) => {
     // Add category-specific data
     if (category === 'Sighting') {
       observationData.animal = animal;
-      // Add new animal-specific fields
+      // Add new animal-specific fields (required for sightings)
       console.log('🐾 Adding sighting data for animal:', animal);
+      observationData.animal_activity = animal_activity;
+      observationData.animal_age = animal_age;
+      console.log('   ✅ Added animal_activity:', animal_activity);
+      console.log('   ✅ Added animal_age:', animal_age);
+
+      // Add conditional fields
       if (pride_name) {
         observationData.pride_name = pride_name;
         console.log('   ✅ Added pride_name:', pride_name);
@@ -337,14 +343,6 @@ router.post('/', upload.single('image'), async (req, res) => {
         observationData.leopard_name = leopard_name;
         console.log('   ✅ Added leopard_name:', leopard_name);
       }
-      if (animal_activity) {
-        observationData.animal_activity = animal_activity;
-        console.log('   ✅ Added animal_activity:', animal_activity);
-      }
-      if (animal_age) {
-        observationData.animal_age = animal_age;
-        console.log('   ✅ Added animal_age:', animal_age);
-      }
     }
     if (category === 'Incident') {
       observationData.incident_type = incident_type;
@@ -352,8 +350,8 @@ router.post('/', upload.single('image'), async (req, res) => {
       if (poaching_type) {
         observationData.poaching_type = poaching_type;
         console.log('   ✅ Added poaching_type:', poaching_type);
-        // Add poached animal for carcass incidents
-        if (poached_animal) {
+        // Add poached animal for carcass incidents (required)
+        if (poaching_type === 'Carcass') {
           observationData.poached_animal = poached_animal;
           console.log('   ✅ Added poached_animal:', poached_animal);
         }
