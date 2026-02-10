@@ -65,22 +65,15 @@ function csvToGeoJSON(csvText) {
 // GET /api/fires - Fetch fire data from NASA FIRMS API
 router.get('/', async (req, res) => {
   try {
-    const country = req.query.country || "USA"; // For compatibility, but we use bounding box
     const days = Math.min(parseInt(req.query.days) || 3, 5); // Max 5 days for area API
 
-    // Define bounding boxes for different countries/regions
-    const boundingBoxes = {
+    // Define bounding boxes for multiple regions
+    const regions = {
       'USA': '-125,24,-66,49',  // Continental USA
-      'AUS': '112,-44,154,-10', // Australia
-      'BRA': '-74,-34,-35,5',   // Brazil
-      'ZAF': '16,-35,33,-22',   // South Africa
-      'BWA': '19.9,-26.9,29.4,-17.8', // Botswana (includes KPR concession)
-      'WORLD': '-180,-90,180,90' // World (but limited by API)
+      'BWA': '19.9,-26.9,29.4,-17.8' // Botswana (includes KPR concession)
     };
 
-    const bbox = boundingBoxes[country] || boundingBoxes['USA'];
-
-    console.log(`Fetching fire data for ${country} (bbox: ${bbox}), last ${days} days`);
+    console.log(`Fetching fire data for USA and Botswana (KPR), last ${days} days`);
 
     const BASE_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv";
 
@@ -191,32 +184,13 @@ router.get('/', async (req, res) => {
         details: `API returned ${modisRes.status}: ${modisResponseText.substring(0, 200)}`
       });
     }
-    console.log(`MODIS data: ${modisData.features ? modisData.features.length : 0} fires`);
-
-    // Tag each feature with sensor type
-    const viirsFeatures = (viirsData.features || []).map(f => ({
-      ...f,
-      properties: {
-        ...f.properties,
-        sensor: "VIIRS"
-      }
-    }));
-
-    const modisFeatures = (modisData.features || []).map(f => ({
-      ...f,
-      properties: {
-        ...f.properties,
-        sensor: "MODIS"
-      }
-    }));
-
-    // Merge both datasets
+    // Create combined GeoJSON with all fires from both regions
     const combined = {
       type: "FeatureCollection",
-      features: [...viirsFeatures, ...modisFeatures]
+      features: allFires
     };
 
-    console.log(`Total fires returned: ${combined.features.length}`);
+    console.log(`Total fires returned from all regions: ${combined.features.length}`);
 
     res.status(200).json(combined);
 
