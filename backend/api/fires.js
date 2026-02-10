@@ -23,7 +23,7 @@ router.use(validateApiKey);
 // GET /api/fires - Fetch fire data from NASA FIRMS API
 router.get('/', async (req, res) => {
   try {
-    const country = req.query.country || "BWA";
+    const country = req.query.country || "AFR"; // Changed from BWA to AFR (Africa continent)
     const days = req.query.days || "3";
 
     console.log(`Fetching fire data for ${country}, last ${days} days`);
@@ -52,19 +52,42 @@ router.get('/', async (req, res) => {
     console.log('VIIRS Response status:', viirsRes.status, viirsRes.statusText);
     console.log('VIIRS Response headers:', Object.fromEntries(viirsRes.headers.entries()));
 
+    // Get response text
+    const responseText = await viirsRes.text();
+    console.log('VIIRS Response preview (first 500 chars):', responseText.substring(0, 500));
+
+    // Check if response is HTML error page
+    if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+      console.error('VIIRS API returned HTML error page instead of JSON');
+      return res.status(500).json({
+        success: false,
+        error: 'FIRMS API returned HTML error page',
+        details: `API returned HTML instead of JSON. Check MAP_KEY validity. Response: ${responseText.substring(0, 200)}`
+      });
+    }
+
+    // Parse as JSON
+    let viirsData;
+    try {
+      viirsData = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse VIIRS response as JSON:', parseError.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Invalid JSON response from FIRMS API',
+        details: `Response parsing failed: ${parseError.message}. Response: ${responseText.substring(0, 200)}`
+      });
+    }
+
     if (!viirsRes.ok) {
-      const errorText = await viirsRes.text();
       console.error(`VIIRS API request failed: ${viirsRes.status} ${viirsRes.statusText}`);
-      console.error('VIIRS Error response:', errorText.substring(0, 500));
       console.error('VIIRS URL used:', viirsUrl);
       return res.status(viirsRes.status).json({
         success: false,
         error: 'Failed to fetch VIIRS fire data',
-        details: `API returned ${viirsRes.status}: ${errorText.substring(0, 200)}`
+        details: `API returned ${viirsRes.status}: ${responseText.substring(0, 200)}`
       });
     }
-
-    const viirsData = await viirsRes.json();
     console.log(`VIIRS data: ${viirsData.features ? viirsData.features.length : 0} fires`);
 
     // Fetch MODIS data
@@ -76,19 +99,42 @@ router.get('/', async (req, res) => {
     console.log('MODIS Response status:', modisRes.status, modisRes.statusText);
     console.log('MODIS Response headers:', Object.fromEntries(modisRes.headers.entries()));
 
+    // Get response text
+    const modisResponseText = await modisRes.text();
+    console.log('MODIS Response preview (first 500 chars):', modisResponseText.substring(0, 500));
+
+    // Check if response is HTML error page
+    if (modisResponseText.trim().startsWith('<!DOCTYPE') || modisResponseText.trim().startsWith('<html')) {
+      console.error('MODIS API returned HTML error page instead of JSON');
+      return res.status(500).json({
+        success: false,
+        error: 'FIRMS API returned HTML error page',
+        details: `API returned HTML instead of JSON. Check MAP_KEY validity. Response: ${modisResponseText.substring(0, 200)}`
+      });
+    }
+
+    // Parse as JSON
+    let modisData;
+    try {
+      modisData = JSON.parse(modisResponseText);
+    } catch (parseError) {
+      console.error('Failed to parse MODIS response as JSON:', parseError.message);
+      return res.status(500).json({
+        success: false,
+        error: 'Invalid JSON response from FIRMS API',
+        details: `Response parsing failed: ${parseError.message}. Response: ${modisResponseText.substring(0, 200)}`
+      });
+    }
+
     if (!modisRes.ok) {
-      const errorText = await modisRes.text();
       console.error(`MODIS API request failed: ${modisRes.status} ${modisRes.statusText}`);
-      console.error('MODIS Error response:', errorText.substring(0, 500));
       console.error('MODIS URL used:', modisUrl);
       return res.status(modisRes.status).json({
         success: false,
         error: 'Failed to fetch MODIS fire data',
-        details: `API returned ${modisRes.status}: ${errorText.substring(0, 200)}`
+        details: `API returned ${modisRes.status}: ${modisResponseText.substring(0, 200)}`
       });
     }
-
-    const modisData = await modisRes.json();
     console.log(`MODIS data: ${modisData.features ? modisData.features.length : 0} fires`);
 
     // Tag each feature with sensor type
