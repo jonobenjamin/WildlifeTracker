@@ -8,7 +8,6 @@ const admin = require('firebase-admin');
 // Initialize Firebase Admin SDK (serverless-safe)
 let db;
 
-
 function initializeFirebase() {
   if (!admin.apps.length) {
     // Firebase not initialized yet - ONLY use environment variable (no file loading)
