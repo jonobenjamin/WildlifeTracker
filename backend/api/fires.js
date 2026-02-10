@@ -74,6 +74,7 @@ router.get('/', async (req, res) => {
       'AUS': '112,-44,154,-10', // Australia
       'BRA': '-74,-34,-35,5',   // Brazil
       'ZAF': '16,-35,33,-22',   // South Africa
+      'BWA': '19.9,-26.9,29.4,-17.8', // Botswana (includes KPR concession)
       'WORLD': '-180,-90,180,90' // World (but limited by API)
     };
 
