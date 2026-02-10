@@ -20,6 +20,48 @@ const validateApiKey = (req, res, next) => {
 // Apply API key validation to all routes
 router.use(validateApiKey);
 
+// Function to parse CSV to GeoJSON
+function csvToGeoJSON(csvText) {
+  const lines = csvText.trim().split('\n');
+  if (lines.length < 2) return { type: 'FeatureCollection', features: [] };
+
+  const headers = lines[0].split(',');
+  const features = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const values = lines[i].split(',');
+    if (values.length !== headers.length) continue;
+
+    const properties = {};
+    headers.forEach((header, index) => {
+      properties[header.trim()] = values[index].trim();
+    });
+
+    // Parse coordinates
+    const lat = parseFloat(properties.latitude);
+    const lng = parseFloat(properties.longitude);
+
+    if (!isNaN(lat) && !isNaN(lng)) {
+      features.push({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [lng, lat]
+        },
+        properties: {
+          ...properties,
+          sensor: properties.instrument || 'Unknown'
+        }
+      });
+    }
+  }
+
+  return {
+    type: 'FeatureCollection',
+    features: features
+  };
+}
+
 // GET /api/fires - Fetch fire data from NASA FIRMS API
 router.get('/', async (req, res) => {
   try {
@@ -28,7 +70,7 @@ router.get('/', async (req, res) => {
 
     console.log(`Fetching fire data for ${country}, last ${days} days`);
 
-    const BASE_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/geojson";
+    const BASE_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv";
 
     // Check if FIRMS_MAP_KEY environment variable is set
     if (!process.env.FIRMS_MAP_KEY) {
@@ -52,30 +94,31 @@ router.get('/', async (req, res) => {
     console.log('VIIRS Response status:', viirsRes.status, viirsRes.statusText);
     console.log('VIIRS Response headers:', Object.fromEntries(viirsRes.headers.entries()));
 
-    // Get response text
+    // Get response text (CSV format)
     const responseText = await viirsRes.text();
     console.log('VIIRS Response preview (first 500 chars):', responseText.substring(0, 500));
 
     // Check if response is HTML error page
     if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
-      console.error('VIIRS API returned HTML error page instead of JSON');
+      console.error('VIIRS API returned HTML error page instead of CSV');
       return res.status(500).json({
         success: false,
         error: 'FIRMS API returned HTML error page',
-        details: `API returned HTML instead of JSON. Check MAP_KEY validity. Response: ${responseText.substring(0, 200)}`
+        details: `API returned HTML instead of CSV. Check MAP_KEY validity. Response: ${responseText.substring(0, 200)}`
       });
     }
 
-    // Parse as JSON
+    // Parse CSV to GeoJSON
     let viirsData;
     try {
-      viirsData = JSON.parse(responseText);
+      viirsData = csvToGeoJSON(responseText);
+      console.log(`Parsed VIIRS CSV: ${viirsData.features.length} features`);
     } catch (parseError) {
-      console.error('Failed to parse VIIRS response as JSON:', parseError.message);
+      console.error('Failed to parse VIIRS CSV response:', parseError.message);
       return res.status(500).json({
         success: false,
-        error: 'Invalid JSON response from FIRMS API',
-        details: `Response parsing failed: ${parseError.message}. Response: ${responseText.substring(0, 200)}`
+        error: 'Invalid CSV response from FIRMS API',
+        details: `CSV parsing failed: ${parseError.message}. Response: ${responseText.substring(0, 200)}`
       });
     }
 
@@ -99,30 +142,31 @@ router.get('/', async (req, res) => {
     console.log('MODIS Response status:', modisRes.status, modisRes.statusText);
     console.log('MODIS Response headers:', Object.fromEntries(modisRes.headers.entries()));
 
-    // Get response text
+    // Get response text (CSV format)
     const modisResponseText = await modisRes.text();
     console.log('MODIS Response preview (first 500 chars):', modisResponseText.substring(0, 500));
 
     // Check if response is HTML error page
     if (modisResponseText.trim().startsWith('<!DOCTYPE') || modisResponseText.trim().startsWith('<html')) {
-      console.error('MODIS API returned HTML error page instead of JSON');
+      console.error('MODIS API returned HTML error page instead of CSV');
       return res.status(500).json({
         success: false,
         error: 'FIRMS API returned HTML error page',
-        details: `API returned HTML instead of JSON. Check MAP_KEY validity. Response: ${modisResponseText.substring(0, 200)}`
+        details: `API returned HTML instead of CSV. Check MAP_KEY validity. Response: ${modisResponseText.substring(0, 200)}`
       });
     }
 
-    // Parse as JSON
+    // Parse CSV to GeoJSON
     let modisData;
     try {
-      modisData = JSON.parse(modisResponseText);
+      modisData = csvToGeoJSON(modisResponseText);
+      console.log(`Parsed MODIS CSV: ${modisData.features.length} features`);
     } catch (parseError) {
-      console.error('Failed to parse MODIS response as JSON:', parseError.message);
+      console.error('Failed to parse MODIS CSV response:', parseError.message);
       return res.status(500).json({
         success: false,
-        error: 'Invalid JSON response from FIRMS API',
-        details: `Response parsing failed: ${parseError.message}. Response: ${modisResponseText.substring(0, 200)}`
+        error: 'Invalid CSV response from FIRMS API',
+        details: `CSV parsing failed: ${parseError.message}. Response: ${modisResponseText.substring(0, 200)}`
       });
     }
 
