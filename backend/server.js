@@ -92,7 +92,7 @@ app.set('trust proxy', 1); // Trust Vercel proxy for rate limiting
 app.use((req, res, next) => {
   const allowedOrigins = process.env.ALLOWED_ORIGINS ?
     process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim()) :
-    ['http://localhost:3000', 'http://localhost:5000', 'https://jonobenjamin.github.io'];
+    ['http://localhost:3000', 'http://localhost:5000'];
 
   const origin = req.headers.origin;
 
@@ -101,8 +101,8 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', origin);
   }
 
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-api-key, x-admin-key');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-api-key');
   res.header('Access-Control-Allow-Credentials', 'true');
 
   // Handle preflight requests
@@ -134,7 +134,6 @@ app.get('/', (req, res) => {
       health: '/health',
       observations: '/api/observations (POST only - write-only)',
       images: '/api/observations/:id/image (secure image access)',
-      waterMonitoring: '/api/water-monitoring (GET/POST - water quality data)',
       testFile: '/test-file (POST - test file upload)'
     },
     docs: 'See README.md for API documentation'
@@ -170,6 +169,7 @@ app.use('/api/observations', require('./api/observations')(db));
 app.use('/api/map', require('./api/map'));
 app.use('/api/auth', require('./api/auth'));
 app.use('/api/admin', require('./api/admin'));
+app.use('/api/fires', require('./api/fires')(db));
 app.use('/api/water-monitoring', require('./api/water-monitoring')(db));
 
 // Error handling middleware
