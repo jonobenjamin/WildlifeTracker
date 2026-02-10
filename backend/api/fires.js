@@ -23,7 +23,7 @@ router.use(validateApiKey);
 // GET /api/fires - Fetch fire data from NASA FIRMS API
 router.get('/', async (req, res) => {
   try {
-    const country = req.query.country || "AFR"; // Changed from BWA to AFR (Africa continent)
+    const country = req.query.country || "USA"; // Changed to USA - large country with fire data
     const days = req.query.days || "3";
 
     console.log(`Fetching fire data for ${country}, last ${days} days`);
