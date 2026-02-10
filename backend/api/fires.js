@@ -67,13 +67,10 @@ router.get('/', async (req, res) => {
   try {
     const days = Math.min(parseInt(req.query.days) || 3, 5); // Max 5 days for area API
 
-    // Define bounding boxes for multiple regions
-    const regions = {
-      'USA': '-125,24,-66,49',  // Continental USA
-      'BWA': '19.9,-26.9,29.4,-17.8' // Botswana (includes KPR concession)
-    };
+    // Continental USA bounding box
+    const bbox = '-125,24,-66,49';
 
-    console.log(`Fetching fire data for USA and Botswana (KPR), last ${days} days`);
+    console.log(`Fetching fire data for USA (bbox: ${bbox}), last ${days} days`);
 
     const BASE_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv";
 
@@ -97,46 +94,44 @@ router.get('/', async (req, res) => {
     const viirsRes = await fetch(viirsUrl);
 
     console.log('VIIRS Response status:', viirsRes.status, viirsRes.statusText);
-    console.log('VIIRS Response headers:', Object.fromEntries(viirsRes.headers.entries()));
+
+    if (!viirsRes.ok) {
+      console.error(`VIIRS API request failed: ${viirsRes.status} ${viirsRes.statusText}`);
+      const errorText = await viirsRes.text();
+      console.error('VIIRS Error response:', errorText.substring(0, 200));
+      return res.status(viirsRes.status).json({
+        success: false,
+        error: 'Failed to fetch VIIRS fire data',
+        details: `API returned ${viirsRes.status}: ${errorText.substring(0, 200)}`
+      });
+    }
 
     // Get response text (CSV format)
-    const responseText = await viirsRes.text();
-    console.log('VIIRS Response preview (first 500 chars):', responseText.substring(0, 500));
+    const viirsResponseText = await viirsRes.text();
 
     // Check if response is HTML error page
-    if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+    if (viirsResponseText.trim().startsWith('<!DOCTYPE') || viirsResponseText.trim().startsWith('<html')) {
       console.error('VIIRS API returned HTML error page instead of CSV');
       return res.status(500).json({
         success: false,
         error: 'FIRMS API returned HTML error page',
-        details: `API returned HTML instead of CSV. Check MAP_KEY validity. Response: ${responseText.substring(0, 200)}`
+        details: 'API returned HTML instead of CSV. Check MAP_KEY validity.'
       });
     }
 
     // Parse CSV to GeoJSON
     let viirsData;
     try {
-      viirsData = csvToGeoJSON(responseText);
+      viirsData = csvToGeoJSON(viirsResponseText);
       console.log(`Parsed VIIRS CSV: ${viirsData.features.length} features`);
     } catch (parseError) {
       console.error('Failed to parse VIIRS CSV response:', parseError.message);
       return res.status(500).json({
         success: false,
         error: 'Invalid CSV response from FIRMS API',
-        details: `CSV parsing failed: ${parseError.message}. Response: ${responseText.substring(0, 200)}`
+        details: `CSV parsing failed: ${parseError.message}`
       });
     }
-
-    if (!viirsRes.ok) {
-      console.error(`VIIRS API request failed: ${viirsRes.status} ${viirsRes.statusText}`);
-      console.error('VIIRS URL used:', viirsUrl);
-      return res.status(viirsRes.status).json({
-        success: false,
-        error: 'Failed to fetch VIIRS fire data',
-        details: `API returned ${viirsRes.status}: ${responseText.substring(0, 200)}`
-      });
-    }
-    console.log(`VIIRS data: ${viirsData.features ? viirsData.features.length : 0} fires`);
 
     // Fetch MODIS data
     console.log('Fetching MODIS fire data...');
@@ -145,11 +140,20 @@ router.get('/', async (req, res) => {
     const modisRes = await fetch(modisUrl);
 
     console.log('MODIS Response status:', modisRes.status, modisRes.statusText);
-    console.log('MODIS Response headers:', Object.fromEntries(modisRes.headers.entries()));
+
+    if (!modisRes.ok) {
+      console.error(`MODIS API request failed: ${modisRes.status} ${modisRes.statusText}`);
+      const errorText = await modisRes.text();
+      console.error('MODIS Error response:', errorText.substring(0, 200));
+      return res.status(modisRes.status).json({
+        success: false,
+        error: 'Failed to fetch MODIS fire data',
+        details: `API returned ${modisRes.status}: ${errorText.substring(0, 200)}`
+      });
+    }
 
     // Get response text (CSV format)
     const modisResponseText = await modisRes.text();
-    console.log('MODIS Response preview (first 500 chars):', modisResponseText.substring(0, 500));
 
     // Check if response is HTML error page
     if (modisResponseText.trim().startsWith('<!DOCTYPE') || modisResponseText.trim().startsWith('<html')) {
@@ -157,7 +161,7 @@ router.get('/', async (req, res) => {
       return res.status(500).json({
         success: false,
         error: 'FIRMS API returned HTML error page',
-        details: `API returned HTML instead of CSV. Check MAP_KEY validity. Response: ${modisResponseText.substring(0, 200)}`
+        details: 'API returned HTML instead of CSV. Check MAP_KEY validity.'
       });
     }
 
@@ -171,26 +175,34 @@ router.get('/', async (req, res) => {
       return res.status(500).json({
         success: false,
         error: 'Invalid CSV response from FIRMS API',
-        details: `CSV parsing failed: ${parseError.message}. Response: ${modisResponseText.substring(0, 200)}`
+        details: `CSV parsing failed: ${parseError.message}`
       });
     }
 
-    if (!modisRes.ok) {
-      console.error(`MODIS API request failed: ${modisRes.status} ${modisRes.statusText}`);
-      console.error('MODIS URL used:', modisUrl);
-      return res.status(modisRes.status).json({
-        success: false,
-        error: 'Failed to fetch MODIS fire data',
-        details: `API returned ${modisRes.status}: ${modisResponseText.substring(0, 200)}`
-      });
-    }
-    // Create combined GeoJSON with all fires from both regions
+    // Tag each feature with sensor type
+    const viirsFeatures = (viirsData.features || []).map(f => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        sensor: "VIIRS"
+      }
+    }));
+
+    const modisFeatures = (modisData.features || []).map(f => ({
+      ...f,
+      properties: {
+        ...f.properties,
+        sensor: "MODIS"
+      }
+    }));
+
+    // Merge both datasets
     const combined = {
       type: "FeatureCollection",
-      features: allFires
+      features: [...viirsFeatures, ...modisFeatures]
     };
 
-    console.log(`Total fires returned from all regions: ${combined.features.length}`);
+    console.log(`Total fires returned: ${combined.features.length}`);
 
     res.status(200).json(combined);
 
