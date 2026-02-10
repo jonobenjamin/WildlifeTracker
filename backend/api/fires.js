@@ -98,7 +98,7 @@ router.get('/', async (req, res) => {
 
     // Fetch VIIRS data
     console.log('Fetching VIIRS fire data...');
-    const viirsUrl = `${BASE_URL}/VIIRS_SNPP_NRT/${bbox}/${days}`;
+    const viirsUrl = `${BASE_URL}/${mapKey}/VIIRS_SNPP_NRT/${bbox}/${days}`;
     console.log('VIIRS URL:', viirsUrl);
     const viirsRes = await fetch(viirsUrl);
 
@@ -146,7 +146,7 @@ router.get('/', async (req, res) => {
 
     // Fetch MODIS data
     console.log('Fetching MODIS fire data...');
-    const modisUrl = `${BASE_URL}/MODIS_NRT/${bbox}/${days}`;
+    const modisUrl = `${BASE_URL}/${mapKey}/MODIS_NRT/${bbox}/${days}`;
     console.log('MODIS URL:', modisUrl);
     const modisRes = await fetch(modisUrl);
 
