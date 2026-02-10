@@ -65,10 +65,21 @@ function csvToGeoJSON(csvText) {
 // GET /api/fires - Fetch fire data from NASA FIRMS API
 router.get('/', async (req, res) => {
   try {
-    const country = req.query.country || "USA"; // Changed to USA - large country with fire data
-    const days = req.query.days || "3";
+    const country = req.query.country || "USA"; // For compatibility, but we use bounding box
+    const days = Math.min(parseInt(req.query.days) || 3, 5); // Max 5 days for area API
 
-    console.log(`Fetching fire data for ${country}, last ${days} days`);
+    // Define bounding boxes for different countries/regions
+    const boundingBoxes = {
+      'USA': '-125,24,-66,49',  // Continental USA
+      'AUS': '112,-44,154,-10', // Australia
+      'BRA': '-74,-34,-35,5',   // Brazil
+      'ZAF': '16,-35,33,-22',   // South Africa
+      'WORLD': '-180,-90,180,90' // World (but limited by API)
+    };
+
+    const bbox = boundingBoxes[country] || boundingBoxes['USA'];
+
+    console.log(`Fetching fire data for ${country} (bbox: ${bbox}), last ${days} days`);
 
     const BASE_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv";
 
@@ -87,7 +98,7 @@ router.get('/', async (req, res) => {
 
     // Fetch VIIRS data
     console.log('Fetching VIIRS fire data...');
-    const viirsUrl = `${BASE_URL}/VIIRS_SNPP_NRT/${country}/${days}?MAP_KEY=${mapKey}`;
+    const viirsUrl = `${BASE_URL}/VIIRS_SNPP_NRT/${bbox}/${days}`;
     console.log('VIIRS URL:', viirsUrl);
     const viirsRes = await fetch(viirsUrl);
 
@@ -135,7 +146,7 @@ router.get('/', async (req, res) => {
 
     // Fetch MODIS data
     console.log('Fetching MODIS fire data...');
-    const modisUrl = `${BASE_URL}/MODIS_NRT/${country}/${days}?MAP_KEY=${mapKey}`;
+    const modisUrl = `${BASE_URL}/MODIS_NRT/${bbox}/${days}`;
     console.log('MODIS URL:', modisUrl);
     const modisRes = await fetch(modisUrl);
 
