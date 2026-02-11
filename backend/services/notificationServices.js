@@ -314,7 +314,7 @@ const sendFireAlertNotification = async (fireData) => {
   }
 };
 
-// Main function to send notifications for fire alerts
+// Main function to send notifications for fire alerts (USA fires only)
 const sendFireNotifications = async (firesData) => {
   console.log('🔥 Sending fire alert email notifications...');
 
@@ -324,24 +324,24 @@ const sendFireNotifications = async (firesData) => {
     fireCount: firesData.length
   };
 
-  // Send email notifications for fires in KPR concession area
-  const kprFires = firesData.filter(fire => {
+  // Send email notifications for fires in USA
+  const usaFires = firesData.filter(fire => {
     const details = formatFireDetails(fire);
-    return details.region.includes('KPR');
+    return details.region === 'United States';
   });
 
-  if (kprFires.length > 0) {
-    console.log(`🚨 ${kprFires.length} fires detected in KPR concession area - sending alerts!`);
+  if (usaFires.length > 0) {
+    console.log(`🚨 ${usaFires.length} fires detected in USA - sending alerts!`);
 
     try {
-      // Send one consolidated email for all KPR fires
+      // Send one consolidated email for USA fires
       const consolidatedFireData = {
         properties: {
-          ...kprFires[0].properties,
-          fireCount: kprFires.length,
-          message: `${kprFires.length} fires detected in KPR concession area`,
-          latitude: kprFires[0].geometry.coordinates[1],
-          longitude: kprFires[0].geometry.coordinates[0]
+          ...usaFires[0].properties,
+          fireCount: usaFires.length,
+          message: `${usaFires.length} fires detected in United States`,
+          latitude: usaFires[0].geometry.coordinates[1],
+          longitude: usaFires[0].geometry.coordinates[0]
         }
       };
 
@@ -351,8 +351,8 @@ const sendFireNotifications = async (firesData) => {
       results.email = { success: false, error: error.message };
     }
   } else {
-    console.log('✅ No fires detected in KPR concession area');
-    results.email = { success: true, reason: 'No KPR fires detected' };
+    console.log('✅ No fires detected in USA');
+    results.email = { success: true, reason: 'No USA fires detected' };
   }
 
   console.log('Fire notification results:', JSON.stringify(results, null, 2));
