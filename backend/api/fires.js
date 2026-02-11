@@ -11,6 +11,8 @@ const validateApiKey = (req, res, next) => {
   if (!apiKey || apiKey !== process.env.API_KEY) {
     return res.status(401).json({
       error: 'Unauthorized',
+
+      
       message: 'Valid API key required'
     });
   }
