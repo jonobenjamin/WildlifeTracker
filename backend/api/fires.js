@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { sendFireNotifications } = require('../services/notificationServices');
 
 module.exports = (db) => {
 
@@ -84,7 +85,6 @@ router.get('/', async (req, res) => {
       });
     }
 
-    // FIRMS API uses MAP_KEY as query parameter, not Bearer token
     const mapKey = process.env.FIRMS_MAP_KEY;
 
     // Fetch VIIRS data
@@ -203,6 +203,14 @@ router.get('/', async (req, res) => {
     };
 
     console.log(`Total fires returned: ${combined.features.length}`);
+
+    // Send fire alert emails when KPR fires are detected
+    try {
+      const notificationResults = await sendFireNotifications(combined.features);
+      console.log('Fire notification results:', notificationResults);
+    } catch (notificationError) {
+      console.error('Error sending fire notifications:', notificationError);
+    }
 
     res.status(200).json(combined);
 
