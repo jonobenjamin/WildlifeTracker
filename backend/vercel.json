@@ -12,6 +12,12 @@
       "dest": "server.js"
     }
   ],
+  "crons": [
+    {
+      "path": "/api/cron/fire-check",
+      "schedule": "0 * * * *"
+    }
+  ],
   "env": {
     "NODE_ENV": "production"
   }
