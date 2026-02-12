@@ -170,8 +170,8 @@ app.use('/api/map', require('./api/map'));
 app.use('/api/auth', require('./api/auth'));
 app.use('/api/admin', require('./api/admin'));
 app.use('/api/fires', require('./api/fires')(db));
-app.use('/api/cron/fire-check', require('./api/cron-fire-check'));
 app.use('/api/water-monitoring', require('./api/water-monitoring')(db));
+app.use('/api/cron/fire-check', require('./api/cron-fire-check'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {
