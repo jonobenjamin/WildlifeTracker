@@ -86,32 +86,31 @@ const PORT = process.env.PORT || 3000;
 // Security middleware
 app.use(helmet());
 
-// CORS middleware for Vercel serverless functions
+// CORS - use cors package for reliable preflight handling
 app.set('trust proxy', 1); // Trust Vercel proxy for rate limiting
 
-app.use((req, res, next) => {
-  const allowedOrigins = process.env.ALLOWED_ORIGINS ?
-    process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim()) :
-    ['http://localhost:3000', 'http://localhost:5000', 'https://jonobenjamin.github.io'];
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5000',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5000',
+  'https://jonobenjamin.github.io',
+  ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) : [])
+];
 
-  const origin = req.headers.origin;
-
-  // Check if the requesting origin is allowed
-  if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-    res.header('Access-Control-Allow-Origin', origin);
-  }
-
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-api-key');
-  res.header('Access-Control-Allow-Credentials', 'true');
-
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    res.sendStatus(200);
-  } else {
-    next();
-  }
-});
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*') || origin.endsWith('jonobenjamin.github.io')) {
+      return cb(null, true);
+    }
+    cb(null, false);
+  },
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization', 'x-api-key'],
+  credentials: true,
+  optionsSuccessStatus: 204
+}));
 
 // Rate limiting
 const limiter = rateLimit({
