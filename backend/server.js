@@ -195,11 +195,6 @@ if (require.main === module) {
     console.log(`🚀 Wildlife Tracker API running on port ${PORT}`);
     console.log(`📊 Health check: http://localhost:${PORT}/health`);
   });
-
-
-  
 }
 
 module.exports = app;
-
-
