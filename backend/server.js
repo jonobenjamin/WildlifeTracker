@@ -4,8 +4,9 @@ const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const admin = require('firebase-admin');
+const multer = require('multer');
 
-// Initialize Firebase Admin SDK
+// ===== Initialize Firebase =====
 let db;
 function initializeFirebase() {
   if (!admin.apps.length) {
@@ -29,6 +30,7 @@ function initializeFirebase() {
           databaseURL: `https://${process.env.FIREBASE_PROJECT_ID || 'wildlifetracker-4d28b'}.firebaseio.com`,
           storageBucket: `${process.env.FIREBASE_PROJECT_ID || 'wildlifetracker-4d28b'}.firebasestorage.app`
         });
+        console.log('Firebase Admin SDK initialized');
       } catch (error) {
         console.error('Failed to initialize Firebase:', error.message);
         throw error;
@@ -40,7 +42,6 @@ function initializeFirebase() {
   return admin.firestore();
 }
 
-// Initialize Firebase
 try {
   initializeFirebase();
   db = admin.firestore();
@@ -51,22 +52,23 @@ try {
   db = null;
 }
 
+// ===== Express App Setup =====
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ===== Security & Middleware =====
+// Security
 app.use(helmet());
-app.set('trust proxy', 1); // for Vercel proxy
+app.set('trust proxy', 1);
 
-// Fixed CORS middleware
+// ===== Fixed CORS Middleware =====
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
   : ['http://localhost:3000', 'http://localhost:5000', 'https://jonobenjamin.github.io'];
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (!origin || allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
     res.setHeader(
       'Access-Control-Allow-Headers',
@@ -75,8 +77,9 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
 
+  // Always respond to preflight OPTIONS request
   if (req.method === 'OPTIONS') {
-    return res.sendStatus(200); // Preflight handled
+    return res.sendStatus(200);
   }
   next();
 });
@@ -93,7 +96,7 @@ app.use('/api/', limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// ===== Endpoints =====
+// ===== Root and Health Endpoints =====
 app.get('/', (req, res) => {
   res.json({
     message: 'Wildlife Tracker API',
@@ -113,12 +116,8 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Test file upload
-const testUpload = require('multer')({
-  storage: require('multer').memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }
-}).single('image');
-
+// ===== Test File Upload =====
+const testUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } }).single('image');
 app.post('/test-file', testUpload, (req, res) => {
   res.json({
     file: req.file ? {
@@ -133,20 +132,20 @@ app.post('/test-file', testUpload, (req, res) => {
 });
 
 // ===== API Routes =====
-// Firebase-dependent routes first
+// Firebase routes
 app.use('/api/observations', require('./api/observations')(db));
 app.use('/api/fires', require('./api/fires')(db));
 app.use('/api/water-monitoring', require('./api/water-monitoring')(db));
 
-// Other API routes
+// Other routes
 app.use('/api/map', require('./api/map'));
 app.use('/api/auth', require('./api/auth'));
 app.use('/api/admin', require('./api/admin'));
 
-// Cron route (no Firebase needed)
+// Cron route (no db needed)
 app.use('/api/cron/fire-check', require('./api/cron-fire-check'));
 
-// ===== Error handling =====
+// ===== Error Handling =====
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({
@@ -155,12 +154,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler (last)
+// 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// ===== Start server if local =====
+// ===== Start Server (for local dev) =====
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`🚀 Wildlife Tracker API running on port ${PORT}`);
