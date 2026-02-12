@@ -15,7 +15,7 @@
   "crons": [
     {
       "path": "/api/cron/fire-check",
-      "schedule": "0 * * * *"
+      "schedule": "0 4 * * *"
     }
   ],
   "env": {
