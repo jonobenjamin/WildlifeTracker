@@ -1,7 +1,14 @@
 const express = require('express');
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 
 const router = express.Router();
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+  return { salt, hash };
+}
 
 // Middleware to check for admin authentication (API key based) - ALWAYS ENABLED
 const requireAdmin = (req, res, next) => {
@@ -41,9 +48,12 @@ router.get('/users', requireAdmin, async (req, res) => {
     console.log('📊 Admin API - Database being used:', db._settings?.databaseId || 'default');
 
     // Get all users from the users collection
-    const usersSnapshot = await db.collection('users')
-      .orderBy('registeredAt', 'desc')
-      .get();
+    let usersSnapshot;
+    try {
+      usersSnapshot = await db.collection('users').orderBy('registeredAt', 'desc').get();
+    } catch (e) {
+      usersSnapshot = await db.collection('users').get();
+    }
 
     const users = [];
     usersSnapshot.forEach(doc => {
@@ -56,6 +66,7 @@ router.get('/users', requireAdmin, async (req, res) => {
         phone: userData.phone,
         role: userData.role || 'user',
         status: userData.status || 'active',
+        hasPassword: !!(userData.passwordSalt && userData.passwordHash),
         registeredAt: userData.registeredAt?.toDate?.() ? userData.registeredAt.toDate().toISOString() : userData.registeredAt,
         lastLogin: userData.lastLogin?.toDate?.() ? userData.lastLogin.toDate().toISOString() : userData.lastLogin
       });
@@ -79,6 +90,141 @@ router.get('/users', requireAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch users'
+    });
+  }
+});
+
+// Create new user - password optional (null for app-only users)
+router.post('/users', requireAdmin, async (req, res) => {
+  try {
+    const { name, email, phone, password, role } = req.body;
+    const identifier = (email || phone || '').toString().trim();
+
+    if (!name || !identifier) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name and email or phone are required'
+      });
+    }
+
+    const validRoles = ['admin', 'user', 'viewer'];
+    const userRole = validRoles.includes(role) ? role : 'user';
+
+    const db = admin.firestore();
+    const isEmail = identifier.includes('@');
+    const key = isEmail
+      ? identifier.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_')
+      : identifier.replace(/[^0-9a-zA-Z]/g, '_');
+    const docId = isEmail ? `email_${key}` : `phone_${key}`;
+
+    const existingDoc = await db.collection('users').doc(docId).get();
+    if (existingDoc.exists) {
+      return res.status(400).json({
+        success: false,
+        message: 'A user with this email or phone already exists'
+      });
+    }
+
+    const userData = {
+      uid: docId,
+      name: name.trim(),
+      role: userRole,
+      status: 'active',
+      registeredAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdBy: req.adminUid
+    };
+
+    if (isEmail) {
+      userData.email = identifier.toLowerCase();
+    } else {
+      userData.phone = identifier;
+    }
+
+    if (password && password.length >= 6) {
+      const { salt, hash } = hashPassword(password);
+      userData.passwordSalt = salt;
+      userData.passwordHash = hash;
+    }
+    // No password = omit fields (app-only users)
+
+    await db.collection('users').doc(docId).set(userData);
+
+    res.json({
+      success: true,
+      message: 'User created successfully',
+      user: {
+        id: docId,
+        name: userData.name,
+        email: userData.email,
+        role: userData.role,
+        status: userData.status
+      }
+    });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create user'
+    });
+  }
+});
+
+// Update user (name, role, password) - must be before /status route
+router.patch('/users/:userId', requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { name, role, password } = req.body;
+
+    const db = admin.firestore();
+    const userRef = db.collection('users').doc(userId);
+
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const updates = {
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedBy: req.adminUid
+    };
+
+    if (name !== undefined && name.trim()) {
+      updates.name = name.trim();
+    }
+
+    if (role !== undefined) {
+      const validRoles = ['admin', 'user', 'viewer'];
+      if (validRoles.includes(role)) {
+        updates.role = role;
+      }
+    }
+
+    if (password !== undefined) {
+      if (password.length >= 6) {
+        const { salt, hash } = hashPassword(password);
+        updates.passwordSalt = salt;
+        updates.passwordHash = hash;
+      } else if (password.length === 0) {
+        updates.passwordSalt = admin.firestore.FieldValue.delete();
+        updates.passwordHash = admin.firestore.FieldValue.delete();
+      }
+    }
+
+    await userRef.update(updates);
+
+    res.json({
+      success: true,
+      message: 'User updated successfully',
+      userId: userId
+    });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update user'
     });
   }
 });
