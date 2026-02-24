@@ -192,6 +192,8 @@ router.post('/', upload.single('image'), async (req, res) => {
     const {
       category,
       animal,
+      pride,
+      leopard,
       activity,
       age,
       incident_type,
@@ -277,6 +279,8 @@ router.post('/', upload.single('image'), async (req, res) => {
     // Add category-specific data (all fields from app)
     if (category === 'Sighting') {
       observationData.animal = animal;
+      if (pride) observationData.pride = pride;
+      if (leopard) observationData.leopard = leopard;
       if (activity) observationData.activity = activity;
       if (age) observationData.age = age;
     }
