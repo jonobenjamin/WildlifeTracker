@@ -19,7 +19,8 @@ router.get('/', async (req, res) => {
 
     const BASE_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv";
     // KPR/Botswana bbox (west,south,east,north) - Khwai Private Reserve concession area
-    const bbox = '22,-20,25,-17.5';
+    // const bbox = '22,-20,25,-17.5';
+    const bbox = '-125,24,-66,49';
     const days = 3;
 
     if (!process.env.FIRMS_MAP_KEY) {
