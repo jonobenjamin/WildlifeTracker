@@ -94,6 +94,11 @@ module.exports = (db) => {
         });
       }
 
+      // Store geoJson as JSON string - Firestore rejects nested arrays (coordinates)
+      const geoJsonStr = geoJson != null
+        ? (typeof geoJson === 'string' ? geoJson : JSON.stringify(geoJson))
+        : null;
+
       const trackingData = {
         startTime,
         endTime,
@@ -101,7 +106,7 @@ module.exports = (db) => {
         user,
         totalTimeSeconds: totalTimeSeconds ?? null,
         distanceMeters: distanceMeters ?? null,
-        geoJson: geoJson ?? null,
+        geoJson: geoJsonStr,
         vehicle: trackingType.toLowerCase() === 'vehicle' ? vehicle : null,
         timestamp: new Date().toISOString(),
         synced: true
@@ -143,7 +148,18 @@ module.exports = (db) => {
 
       const activities = [];
       snapshot.forEach(doc => {
-        activities.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        // Parse geoJson from string (stored to avoid Firestore nested-entity limits)
+        const geoJson = data.geoJson;
+        const parsed = { ...data };
+        if (typeof geoJson === 'string') {
+          try {
+            parsed.geoJson = JSON.parse(geoJson);
+          } catch {
+            parsed.geoJson = geoJson;
+          }
+        }
+        activities.push({ id: doc.id, ...parsed });
       });
 
       res.json({
