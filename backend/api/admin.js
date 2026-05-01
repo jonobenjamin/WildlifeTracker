@@ -56,10 +56,28 @@ router.get('/users', requireAdmin, async (req, res) => {
     }
 
     const users = [];
-    usersSnapshot.forEach(doc => {
-      const userData = doc.data();
+    for (const docSnap of usersSnapshot.docs) {
+      const userData = docSnap.data();
+      let lastLoginIso = userData.lastLogin?.toDate?.()
+        ? userData.lastLogin.toDate().toISOString()
+        : userData.lastLogin;
+
+      try {
+        const authUser = await admin.auth().getUser(docSnap.id);
+        const authSignIn = authUser.metadata?.lastSignInTime;
+        if (authSignIn) {
+          const authMs = new Date(authSignIn).getTime();
+          const fsMs = lastLoginIso ? new Date(lastLoginIso).getTime() : 0;
+          if (!fsMs || authMs > fsMs) {
+            lastLoginIso = new Date(authSignIn).toISOString();
+          }
+        }
+      } catch (_) {
+        // No Auth user yet for this Firestore doc
+      }
+
       users.push({
-        id: doc.id,
+        id: docSnap.id,
         uid: userData.uid,
         name: userData.name,
         email: userData.email,
@@ -68,9 +86,9 @@ router.get('/users', requireAdmin, async (req, res) => {
         status: userData.status || 'active',
         hasPassword: !!(userData.passwordSalt && userData.passwordHash),
         registeredAt: userData.registeredAt?.toDate?.() ? userData.registeredAt.toDate().toISOString() : userData.registeredAt,
-        lastLogin: userData.lastLogin?.toDate?.() ? userData.lastLogin.toDate().toISOString() : userData.lastLogin
+        lastLogin: lastLoginIso
       });
-    });
+    }
 
     // Calculate stats
     const stats = {
