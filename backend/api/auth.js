@@ -24,6 +24,12 @@ function verifyPassword(password, saltHex, storedHash) {
   return legacyHash === hashStr;
 }
 
+function hashPasswordForStorage(password) {
+  const salt = crypto.randomBytes(16);
+  const hash = crypto.pbkdf2Sync(password, salt, 100000, 64, 'sha512').toString('hex');
+  return { salt: salt.toString('hex'), hash };
+}
+
 // Name + password login
 router.post('/login', async (req, res) => {
   try {
@@ -450,6 +456,62 @@ router.post('/verify-pin', async (req, res) => {
       success: false,
       message: 'Internal server error'
     });
+  }
+});
+
+// Update password for signed-in user (Bearer Firebase ID token)
+router.post('/change-password', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Authorization token required' });
+    }
+
+    const { newPassword, confirmPassword } = req.body || {};
+    if (!newPassword || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'New password and confirmation are required'
+      });
+    }
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ success: false, message: 'Passwords do not match' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters'
+      });
+    }
+
+    const decoded = await admin.auth().verifyIdToken(token);
+    const uid = decoded.uid;
+
+    const db = admin.firestore();
+    const userRef = db.collection('users').doc(uid);
+    const snap = await userRef.get();
+    if (!snap.exists) {
+      return res.status(404).json({ success: false, message: 'User profile not found' });
+    }
+
+    const { salt, hash } = hashPasswordForStorage(newPassword);
+    await userRef.update({
+      passwordSalt: salt,
+      passwordHash: hash,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('change-password error:', error);
+    if (error.code === 'auth/id-token-expired') {
+      return res.status(401).json({ success: false, message: 'Session expired; please sign in again' });
+    }
+    if (error.code === 'auth/argument-error' || error.code === 'auth/invalid-id-token') {
+      return res.status(401).json({ success: false, message: 'Invalid session; please sign in again' });
+    }
+    res.status(500).json({ success: false, message: 'Failed to change password' });
   }
 });
 
