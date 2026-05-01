@@ -85,6 +85,11 @@ router.post('/login', async (req, res) => {
       provider: 'password'
     });
 
+    await db.collection('users').doc(uid).set(
+      { lastLogin: admin.firestore.FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+
     res.json({
       success: true,
       customToken,
@@ -418,6 +423,12 @@ router.post('/verify-pin', async (req, res) => {
     console.log('Token details:', { uid, claims: additionalClaims });
     const customToken = await admin.auth().createCustomToken(uid, additionalClaims);
     console.log('Custom token created successfully');
+
+    const db = admin.firestore();
+    await db.collection('users').doc(uid).set(
+      { lastLogin: admin.firestore.FieldValue.serverTimestamp() },
+      { merge: true }
+    );
 
     // Clean up used PIN
     pinStore.delete(emailKey);
