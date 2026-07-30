@@ -330,10 +330,12 @@ export default function ConcessionMapPage() {
     try {
       const res = await apiFetch(`/api/fires?days=${fireDays}`);
       setFires(res.features || []);
-      setFiresLoaded(true);
     } catch (e) {
-      setFiresError(e.message);
+      setFires([]);
+      setFiresError(e.message || 'Failed to load fire data');
     } finally {
+      // Mark attempted even on failure so we don't infinite-retry on every render.
+      setFiresLoaded(true);
       setFiresLoading(false);
     }
   }, [fireDays]);
@@ -345,7 +347,8 @@ export default function ConcessionMapPage() {
   }, [viewMode, firesLoaded, firesLoading, loadFires]);
 
   useEffect(() => {
-    if (viewMode === 'fires') loadFires();
+    if (viewMode !== 'fires') return;
+    setFiresLoaded(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fireDays]);
 

@@ -3,10 +3,11 @@
  * Used by both /api/fires (dashboard) and /api/cron/fire-alerts (scheduled notifications).
  */
 async function fetchFireData(days = 3) {
-  const daysParam = Math.min(parseInt(days) || 3, 5);
-  const bbox = '-125,24,-66,49'; // Continental USA
+  const daysParam = Math.min(parseInt(days) || 3, 7);
+  // west,south,east,north — Khwai / Okavango region (not USA)
+  const bbox = '22.5,-20.2,24.6,-18.0';
   const BASE_URL = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv';
-  const mapKey = process.env.FIRMS_MAP_KEY;
+  const mapKey = (process.env.FIRMS_MAP_KEY || '').trim().replace(/^["']|["']$/g, '');
 
   if (!mapKey) {
     throw new Error('FIRMS_MAP_KEY environment variable not set');
