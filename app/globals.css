@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --kpr-burgundy: #4c1918;
+  --kpr-burgundy-dark: #3a1311;
+  --kpr-green: #43512d;
+  --kpr-green-light: #526b38;
+  --kpr-gold: #c9a96b;
+  --portal-bg: #f0f2ec;
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--portal-bg);
+    color: #1f2933;
+  }
+}
+
+@layer components {
+  .kpr-card {
+    @apply bg-white border border-portal-border rounded-portal-lg shadow-portal;
+  }
+
+  .kpr-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-portal px-4 py-2.5 font-semibold text-sm text-white transition transform;
+    background: linear-gradient(135deg, var(--kpr-green-light), var(--kpr-green));
+    box-shadow: 0 4px 12px rgba(67, 81, 45, 0.25);
+  }
+  .kpr-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+  .kpr-btn:disabled {
+    @apply bg-slate-300 shadow-none cursor-not-allowed;
+    background: #cbd5e1;
+  }
+
+  .kpr-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-portal px-4 py-2.5 font-semibold text-sm border border-portal-border bg-portal-surface-muted text-portal-text transition;
+  }
+  .kpr-btn-secondary:hover {
+    background: #eef2e8;
+  }
+
+  .kpr-btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-portal px-4 py-2.5 font-semibold text-sm text-white transition;
+    background: var(--portal-danger, #b42318);
+  }
+
+  .kpr-input {
+    @apply w-full rounded-portal border border-portal-border px-3.5 py-2.5 text-sm outline-none transition;
+  }
+  .kpr-input:focus {
+    border-color: var(--kpr-green-light);
+    box-shadow: 0 0 0 3px rgba(82, 107, 56, 0.12);
+  }
+
+  .kpr-label {
+    @apply block text-xs font-semibold text-portal-text mb-1.5;
+  }
+
+  .kpr-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
+  }
+}

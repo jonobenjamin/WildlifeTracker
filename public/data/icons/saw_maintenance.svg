@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <g fill="none" stroke="#DAA520" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Saw blade - curved teeth -->
+    <path d="M12 20 L16 20 L18 28 L22 20 L26 20 L28 28 L32 20 L36 20 L38 28 L42 20 L46 20 L48 28 L52 20"/>
+    <!-- Handle -->
+    <rect x="24" y="28" width="16" height="24" rx="2" fill="#8B4513" stroke="#5D3A1A"/>
+  </g>
+</svg>

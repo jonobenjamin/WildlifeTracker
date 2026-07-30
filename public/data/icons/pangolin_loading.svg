@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Stylized pangolin - curled ball with overlapping scales -->
+  <g fill="#3498db" stroke="#2c3e50" stroke-width="1.5">
+    <!-- Body arc -->
+    <path d="M32 8 Q48 16 52 32 Q48 48 32 56 Q16 48 12 32 Q16 16 32 8" fill="none" stroke="#3498db"/>
+    <!-- Overlapping scale pattern -->
+    <path d="M32 14 L36 22 L32 30 L28 22 Z" fill="#3498db"/>
+    <path d="M24 24 L28 32 L24 40 L20 32 Z" fill="#3498db"/>
+    <path d="M40 24 L44 32 L40 40 L36 32 Z" fill="#3498db"/>
+    <path d="M28 38 L32 46 L28 52 L24 46 Z" fill="#3498db"/>
+    <path d="M36 38 L40 46 L36 52 L32 46 Z" fill="#3498db"/>
+    <path d="M32 22 L36 30 L32 38 L28 30 Z" fill="#3498db"/>
+  </g>
+</svg>

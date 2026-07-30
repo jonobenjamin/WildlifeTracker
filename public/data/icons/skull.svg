@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <g fill="#2c3e50" stroke="#2c3e50" stroke-width="1">
+    <!-- Skull shape -->
+    <ellipse cx="32" cy="36" rx="20" ry="18"/>
+    <!-- Eye sockets -->
+    <ellipse cx="24" cy="34" rx="5" ry="6" fill="#1a1a1a"/>
+    <ellipse cx="40" cy="34" rx="5" ry="6" fill="#1a1a1a"/>
+    <!-- Nose -->
+    <path d="M32 38 L28 48 L36 48 Z" fill="#1a1a1a"/>
+    <!-- Jaw/teeth hint -->
+    <path d="M18 48 Q32 54 46 48" fill="none" stroke="#2c3e50" stroke-width="2"/>
+  </g>
+</svg>
