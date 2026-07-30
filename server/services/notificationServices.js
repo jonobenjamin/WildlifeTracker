@@ -193,10 +193,23 @@ const sendObservationNotification = async (observation) => {
     return { success: false, reason: 'Unsupported category' };
   }
 
+  // Sightings / incidents / maintenance: no map-boundary filter — anywhere is fine.
   const recipients = await resolveRecipients(category, item);
   if (recipients.length === 0) {
     console.log(`No notification rules matched for ${category}/${item}`);
-    return { success: true, reason: 'No matching notification rules' };
+    return {
+      success: false,
+      reason: `No matching notification rules for ${category}/${item || '(any)'}. Check Admin → Configure Notifications (species must match, or choose All).`,
+      resendConfigured: isConfigured(),
+    };
+  }
+  if (!isConfigured()) {
+    return {
+      success: false,
+      reason: 'Resend not configured (set RESEND_API_KEY and RESEND_FROM_EMAIL on Vercel)',
+      recipients,
+      resendConfigured: false,
+    };
   }
 
   const rows = [

@@ -223,7 +223,9 @@ export default function ConfigureNotifications({ users = [] }) {
 
           <p className="text-sm text-portal-text-muted">
             Choose a submission type, the specific items to watch, and which users receive the email.
-            Sighting alerts are not limited by map bounds. Fire alerts use the Okavango Delta area.
+            Sightings, incidents, and maintenance alert from <strong>anywhere</strong> (not limited to
+            the concession). Only fire alerts use the Okavango Delta / KPR area. Species/type must match
+            your rule (or select All). Use <strong>Send test</strong> first to confirm Resend works.
           </p>
 
           <form onSubmit={handleCreate} className="space-y-5 pb-6 border-b border-portal-border">

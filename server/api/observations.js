@@ -376,11 +376,13 @@ router.post('/', upload.single('image'), async (req, res) => {
       ...observationData
     };
 
+    let notification = null;
     try {
-      const emailResults = await sendObservationNotification(savedObservation);
-      console.log('Observation notification result:', emailResults);
+      notification = await sendObservationNotification(savedObservation);
+      console.log('Observation notification result:', notification);
     } catch (error) {
       console.error('Email notification failed:', error);
+      notification = { success: false, reason: error.message };
     }
 
     res.status(201).json({
@@ -389,7 +391,9 @@ router.post('/', upload.single('image'), async (req, res) => {
       data: {
         id: docRef.id,
         ...observationData
-      }
+      },
+      // Helps debug Admin rules / Resend without opening Vercel logs
+      notification,
     });
 
   } catch (error) {
