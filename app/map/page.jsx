@@ -7,9 +7,11 @@ import LeafletMap from '@/components/LeafletMap';
 import MapLegend from '@/components/MapLegend';
 import MapFilterPanel from '@/components/MapFilterPanel';
 import WaterTrendsModal from '@/components/WaterTrendsModal';
+import WaterExtentSlider from '@/components/WaterExtentSlider';
 import { useAuth, useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
 import { divIcon, dotIcon, recentPinIcon, colorForLabel, ensureHeatPlugin, fetchGeoJson } from '@/lib/mapIcons';
+import { attachWeatherPopup } from '@/lib/weather';
 
 const LEGEND_ITEMS = [
   { key: 'roads', label: 'Roads', emoji: '🛣️' },
@@ -55,6 +57,9 @@ export default function ConcessionMapPage() {
   const { authorized } = useRequireRole(['admin']);
   const { user } = useAuth();
   const mapObj = useRef({ map: null, L: null, baseLayers: {}, activeLayer: null, recentLayer: null, waterMarkers: [], fireLayer: null });
+  // React state mirror of the Leaflet map — refs alone don't re-render, so the
+  // WaterExtentSlider (which needs map + L) would never mount without this.
+  const [mapReady, setMapReady] = useState({ map: null, L: null });
 
   const [toggles, setToggles] = useState({ roads: false, camps: true, poi: false });
   const [loading, setLoading] = useState(true);
@@ -121,6 +126,7 @@ export default function ConcessionMapPage() {
   const handleReady = useCallback(async (map, L) => {
     mapObj.current.map = map;
     mapObj.current.L = L;
+    setMapReady({ map, L });
     try {
       const [boundary, roads, camps, poi] = await Promise.all([
         fetchGeoJson('/data/geojson/Consession_boundary.geojson'),
@@ -142,7 +148,10 @@ export default function ConcessionMapPage() {
         pointToLayer: (feature, latlng) => L.marker(latlng, { icon: divIcon(L, 'camp') }),
         onEachFeature: (feature, layer) => {
           const name = feature.properties?.Camps || feature.properties?.name || 'Camp';
-          layer.bindPopup(`<strong>${escapeHtml(name)}</strong>`);
+          const baseHtml = `<strong>${escapeHtml(name)}</strong>`;
+          layer.bindPopup(baseHtml);
+          const latlng = layer.getLatLng();
+          attachWeatherPopup(layer, latlng.lat, latlng.lng, baseHtml);
         },
       });
 
@@ -275,11 +284,11 @@ export default function ConcessionMapPage() {
           mapObj.current.activeLayer = L.layerGroup(markers).addTo(map);
         }
         setTotal(filtered.length);
-      } else if (viewMode === 'water-monitoring') {
+      } else if (viewMode === 'water-quality') {
         const markers = Object.entries(WATER_LOCATIONS).map(([key, loc]) => {
           const marker = L.marker(loc.coords, { icon: dotIcon(L, '#1e90ff', 16) });
           marker.bindPopup(
-            `<strong>${escapeHtml(loc.name)}</strong><br><em>Water Monitoring Location</em><br><button onclick="window.__kprShowWaterTrends('${key}')" style="margin-top:6px;cursor:pointer;">View Trends</button>`
+            `<strong>${escapeHtml(loc.name)}</strong><br><em>Water Quality Location</em><br><button onclick="window.__kprShowWaterTrends('${key}')" style="margin-top:6px;cursor:pointer;">View Trends</button>`
           );
           marker.addTo(map);
           return marker;
@@ -299,11 +308,11 @@ export default function ConcessionMapPage() {
               fillOpacity: isViirs ? 0.8 : 0.7,
               weight: 2,
             });
-            marker.bindPopup(
-              `<strong>${escapeHtml(f.properties?.sensor || 'Unknown')} Fire Detection</strong><br>Confidence: ${escapeHtml(
-                f.properties?.confidence ?? 'N/A'
-              )}%<br>FRP: ${escapeHtml(f.properties?.frp ?? 'N/A')} MW<br>Date: ${escapeHtml(f.properties?.acq_date ?? 'N/A')}`
-            );
+            const baseHtml = `<strong>${escapeHtml(f.properties?.sensor || 'Unknown')} Fire Detection</strong><br>Confidence: ${escapeHtml(
+              f.properties?.confidence ?? 'N/A'
+            )}%<br>FRP: ${escapeHtml(f.properties?.frp ?? 'N/A')} MW<br>Date: ${escapeHtml(f.properties?.acq_date ?? 'N/A')}`;
+            marker.bindPopup(baseHtml);
+            attachWeatherPopup(marker, lat, lng, baseHtml);
             return marker;
           });
         mapObj.current.fireLayer = L.layerGroup(markers).addTo(map);
@@ -373,10 +382,10 @@ export default function ConcessionMapPage() {
           user: user?.displayName || user?.email || user?.phoneNumber || user?.uid || '',
         }),
       });
-      alert('Water monitoring data submitted successfully!');
+      alert('Water quality data submitted successfully!');
       setWaterForm({});
     } catch (e) {
-      alert('Failed to submit water monitoring data: ' + e.message);
+      alert('Failed to submit water quality data: ' + e.message);
     } finally {
       setWaterSubmitting(false);
     }
@@ -400,6 +409,9 @@ export default function ConcessionMapPage() {
           {error && <div className="absolute bottom-3 left-3 z-[500] kpr-card px-3.5 py-2 text-xs text-portal-danger">{error}</div>}
           {viewMode === 'fires' && firesError && (
             <div className="absolute bottom-3 left-3 z-[500] kpr-card px-3.5 py-2 text-xs text-portal-danger">{firesError}</div>
+          )}
+          {viewMode === 'water-monitoring' && mapReady.map && mapReady.L && (
+            <WaterExtentSlider map={mapReady.map} L={mapReady.L} />
           )}
         </div>
 

@@ -37,8 +37,28 @@ production on that repo.
    - `NEXT_PUBLIC_FIREBASE_*` (public Firebase Web SDK config)
    - `EMAILJS_*` if you want PIN/fire-alert emails to keep working
    - `FIRMS_MAP_KEY`, `CRON_SECRET` if you want the daily fire-check cron
+   - `OKAVANGO_API_BASE=https://okavangowater.com`, `OKAVANGO_PARTNER_SLUG`, `OKAVANGO_API_KEY`
+     (server-side only — used by `/api/okavango-water/*` to proxy historical water-extent PNGs;
+     the partner key never reaches the browser)
 4. Deploy. Vercel only builds the Next.js app — it ignores `docs/` (it's not referenced by
    `next.config.mjs` or `public/`), so having it in the repo doesn't affect the Vercel build.
+
+### Okavango Water — quick test (after env vars are set)
+
+```bash
+# Catalog (published dates + Leaflet bounds)
+curl -s "https://YOUR-VERCEL-HOST/api/okavango-water/catalog" \
+  -H "x-api-key: $API_KEY" | head -c 800
+
+# One frame PNG
+curl -s -o /tmp/water.png -w "%{http_code} %{content_type}\n" \
+  "https://YOUR-VERCEL-HOST/api/okavango-water/image?date=YYYYMMDD" \
+  -H "x-api-key: $API_KEY"
+```
+
+Upstream partner endpoints (server-side only):
+`GET https://okavangowater.com/api/partners/$OKAVANGO_PARTNER_SLUG`
+and `.../image?date=YYYYMMDD` with header `X-API-Key: $OKAVANGO_API_KEY`.
 
 ## 3. GitHub Pages settings (for the PWA in `docs/`)
 

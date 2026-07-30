@@ -129,6 +129,7 @@ app.use('/api/cron/fire-check', require('./api/cron-fire-check'));
 app.use('/api/water-monitoring', require('./api/water-monitoring')(db));
 app.use('/api/tracking', require('./api/tracking')(db));
 app.use('/api/trees', require('./api/trees')(db));
+app.use('/api/okavango-water', require('./api/okavango-water'));
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
