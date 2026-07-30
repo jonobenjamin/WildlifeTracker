@@ -8,8 +8,13 @@ import { useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
 
 const KPR_GREEN = '#526b38';
-const KPR_GOLD = '#c9a96b';
 const KPR_BURGUNDY = '#4c1918';
+
+const RECENT_VIEWS = [
+  { key: 'incidents', title: 'Recent incidents', empty: 'No incidents recorded.', typeField: 'incident_type' },
+  { key: 'maintenance', title: 'Recent maintenance', empty: 'No maintenance recorded.', typeField: 'maintenance_type' },
+  { key: 'sightings', title: 'Recent sightings', empty: 'No sightings recorded.', typeField: 'animal' },
+];
 
 export default function ReportsPage() {
   const { authorized } = useRequireRole(['admin']);
@@ -17,6 +22,7 @@ export default function ReportsPage() {
   const [tracking, setTracking] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [recentViewIdx, setRecentViewIdx] = useState(0);
 
   useEffect(() => {
     if (!authorized) return;
@@ -40,8 +46,14 @@ export default function ReportsPage() {
     const sightings = observations.filter((o) => (o.category || '').toLowerCase() === 'sighting');
     const incidents = observations.filter((o) => (o.category || '').toLowerCase() === 'incident');
     const maintenance = observations.filter((o) => (o.category || '').toLowerCase() === 'maintenance');
+    const byDateDesc = (a, b) => dayjs(b.timestamp || 0).valueOf() - dayjs(a.timestamp || 0).valueOf();
     const totalKm = tracking.reduce((sum, t) => sum + (t.distanceMeters || 0), 0) / 1000;
-    return { sightings, incidents, maintenance, totalKm };
+    return {
+      sightings: [...sightings].sort(byDateDesc),
+      incidents: [...incidents].sort(byDateDesc),
+      maintenance: [...maintenance].sort(byDateDesc),
+      totalKm,
+    };
   }, [observations, tracking]);
 
   const animalCounts = useMemo(() => {
@@ -65,6 +77,9 @@ export default function ReportsPage() {
     const sorted = Object.entries(counts).sort((a, b) => dayjs(a[0], 'MMM YY').valueOf() - dayjs(b[0], 'MMM YY').valueOf());
     return sorted.slice(-12);
   }, [observations]);
+
+  const recentView = RECENT_VIEWS[recentViewIdx];
+  const recentRows = stats[recentView.key] || [];
 
   function exportCsv() {
     const rows = [['Date', 'Category', 'Animal/Type', 'User', 'Latitude', 'Longitude']];
@@ -154,7 +169,23 @@ export default function ReportsPage() {
             </section>
 
             <section className="kpr-card p-6 col-span-2">
-              <h2 className="text-base font-semibold mb-4">Recent incidents</h2>
+              <div className="flex items-center justify-between mb-4 gap-3">
+                <h2 className="text-base font-semibold">{recentView.title}</h2>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold px-2.5 py-1.5 rounded-portal border border-portal-border hover:bg-portal-surface-muted"
+                  onClick={() => setRecentViewIdx((i) => (i + 1) % RECENT_VIEWS.length)}
+                  title="Flip between incidents, maintenance, and sightings"
+                  aria-label="Next recent category"
+                >
+                  <span className="text-portal-text-muted text-xs">
+                    {RECENT_VIEWS[(recentViewIdx + 1) % RECENT_VIEWS.length].title.replace('Recent ', '')}
+                  </span>
+                  <span aria-hidden="true" style={{ color: 'var(--kpr-green)' }}>
+                    →
+                  </span>
+                </button>
+              </div>
               <div className="overflow-auto max-h-72 rounded-portal border border-portal-border">
                 <table className="w-full text-sm">
                   <thead className="bg-portal-surface-muted sticky top-0">
@@ -166,18 +197,20 @@ export default function ReportsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {stats.incidents.slice(0, 30).map((o) => (
+                    {recentRows.slice(0, 30).map((o) => (
                       <tr key={o.id} className="border-t border-portal-border">
                         <td className="px-3 py-2">{o.timestamp ? dayjs(o.timestamp).format('DD MMM YYYY HH:mm') : '—'}</td>
-                        <td className="px-3 py-2">{o.incident_type || o.poaching_type || '—'}</td>
+                        <td className="px-3 py-2">
+                          {o[recentView.typeField] || o.poaching_type || o.animal || o.incident_type || o.maintenance_type || '—'}
+                        </td>
                         <td className="px-3 py-2">{o.user || '—'}</td>
                         <td className="px-3 py-2 truncate max-w-xs">{o.notes || '—'}</td>
                       </tr>
                     ))}
-                    {stats.incidents.length === 0 && (
+                    {recentRows.length === 0 && (
                       <tr>
                         <td colSpan={4} className="px-3 py-6 text-center text-portal-text-muted">
-                          No incidents recorded.
+                          {recentView.empty}
                         </td>
                       </tr>
                     )}

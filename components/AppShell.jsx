@@ -28,11 +28,18 @@ function initialsFromLabel(label) {
 
 export default function AppShell({ title, children }) {
   const pathname = usePathname();
-  const { user, role, signOut } = useAuth();
+  const { user, profile, role, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const items = useMemo(() => NAV_ITEMS.filter((i) => !role || i.roles.includes(role)), [role]);
-  const label = user?.displayName || user?.email || user?.phoneNumber || 'Account';
+  const label =
+    profile?.name ||
+    user?.displayName ||
+    profile?.email ||
+    user?.email ||
+    profile?.phone ||
+    user?.phoneNumber ||
+    'Account';
 
   return (
     <div className="flex min-h-screen">

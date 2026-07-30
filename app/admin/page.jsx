@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import AppShell from '@/components/AppShell';
 import { useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
@@ -206,8 +207,17 @@ export default function AdminPage() {
                   {users.map((u) => {
                     const counts = userSubmissionCounts[u.id] || { sightings: 0, incidents: 0, maintenance: 0, total: 0 };
                     return (
-                      <tr key={u.id} className="border-t border-portal-border">
-                        <td className="px-3 py-2.5 font-medium">{u.name}</td>
+                      <tr key={u.id} className="border-t border-portal-border hover:bg-portal-surface-muted/60">
+                        <td className="px-3 py-2.5 font-medium">
+                          <Link
+                            href={`/users/${encodeURIComponent(u.id)}`}
+                            className="hover:underline"
+                            style={{ color: 'var(--kpr-green)' }}
+                            title="Open personal report"
+                          >
+                            {u.name}
+                          </Link>
+                        </td>
                         <td className="px-3 py-2.5">{u.email || u.phone || '—'}</td>
                         <td className="px-3 py-2.5 capitalize">{u.role}</td>
                         <td className="px-3 py-2.5">

@@ -8,7 +8,7 @@ import dayjs from 'dayjs';
 
 export default function ProfilePage() {
   const { authorized } = useRequireRole(['admin', 'user', 'viewer']);
-  const { user } = useAuth();
+  const { user, profile, role } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [observations, setObservations] = useState([]);
@@ -18,6 +18,9 @@ export default function ProfilePage() {
   const [confirmPwd, setConfirmPwd] = useState('');
   const [pwdMsg, setPwdMsg] = useState(null);
   const [pwdBusy, setPwdBusy] = useState(false);
+
+  const displayName = profile?.name || user?.displayName || '';
+  const displayContact = profile?.email || user?.email || profile?.phone || user?.phoneNumber || '';
 
   useEffect(() => {
     if (!authorized) return;
@@ -34,11 +37,16 @@ export default function ProfilePage() {
   }, [authorized]);
 
   const mine = useMemo(() => {
-    if (!user) return [];
-    const label = (user.displayName || user.email || user.phoneNumber || '').toLowerCase();
-    if (!label) return [];
-    return observations.filter((o) => (o.user || '').toLowerCase().includes(label) || label.includes((o.user || '').toLowerCase()));
-  }, [observations, user]);
+    const labels = [displayName, displayContact, profile?.phone, user?.phoneNumber]
+      .map((v) => (v || '').toLowerCase().trim())
+      .filter(Boolean);
+    if (!labels.length) return [];
+    return observations.filter((o) => {
+      const ou = (o.user || '').toLowerCase().trim();
+      if (!ou) return false;
+      return labels.some((label) => ou.includes(label) || label.includes(ou));
+    });
+  }, [observations, displayName, displayContact, profile?.phone, user?.phoneNumber]);
 
   const stats = useMemo(() => {
     const sightings = mine.filter((o) => (o.category || '').toLowerCase() === 'sighting').length;
@@ -88,11 +96,19 @@ export default function ProfilePage() {
           <dl className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <dt className="text-portal-text-muted">Name</dt>
-              <dd className="font-medium">{user?.displayName || '—'}</dd>
+              <dd className="font-medium">{displayName || '—'}</dd>
             </div>
             <div>
               <dt className="text-portal-text-muted">Email / phone</dt>
-              <dd className="font-medium">{user?.email || user?.phoneNumber || '—'}</dd>
+              <dd className="font-medium">{displayContact || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-portal-text-muted">Role</dt>
+              <dd className="font-medium capitalize">{role || profile?.role || '—'}</dd>
+            </div>
+            <div>
+              <dt className="text-portal-text-muted">Status</dt>
+              <dd className="font-medium capitalize">{profile?.status || 'active'}</dd>
             </div>
           </dl>
         </section>

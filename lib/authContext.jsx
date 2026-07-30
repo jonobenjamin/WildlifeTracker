@@ -6,6 +6,7 @@ import {
   signInWithCustomToken,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  updateProfile,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase/client';
@@ -13,8 +14,20 @@ import { apiUrl } from './api';
 
 const AuthContext = createContext(null);
 
+function profileFromDoc(uid, data = {}) {
+  return {
+    uid,
+    name: data.name || '',
+    email: data.email || '',
+    phone: data.phone || '',
+    role: data.role || 'viewer',
+    status: data.status || 'active',
+  };
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState(null);
   const [role, setRole] = useState(null);
   const [ready, setReady] = useState(false);
 
@@ -22,6 +35,7 @@ export function AuthProvider({ children }) {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
         setUser(null);
+        setProfile(null);
         setRole(null);
         setReady(true);
         return;
@@ -31,12 +45,35 @@ export function AuthProvider({ children }) {
         const snap = await getDoc(doc(db, 'users', u.uid));
         if (snap.exists()) {
           const data = snap.data();
+          const next = profileFromDoc(u.uid, data);
+          setProfile(next);
           setRole(data.status === 'revoked' ? null : data.role || 'viewer');
+          // Keep Auth displayName in sync so other Firebase clients see the name too
+          if (next.name && u.displayName !== next.name) {
+            updateProfile(u, { displayName: next.name }).catch(() => {});
+          }
         } else {
+          const fallback = {
+            uid: u.uid,
+            name: u.displayName || '',
+            email: u.email || '',
+            phone: u.phoneNumber || '',
+            role: 'viewer',
+            status: 'active',
+          };
+          setProfile(fallback);
           setRole('viewer');
         }
       } catch (e) {
-        console.error('Failed to resolve role:', e);
+        console.error('Failed to resolve profile:', e);
+        setProfile({
+          uid: u.uid,
+          name: u.displayName || '',
+          email: u.email || '',
+          phone: u.phoneNumber || '',
+          role: 'viewer',
+          status: 'active',
+        });
         setRole('viewer');
       }
       setReady(true);
@@ -53,6 +90,9 @@ export function AuthProvider({ children }) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Login failed');
     await signInWithCustomToken(auth, data.customToken);
+    if (auth.currentUser && data.name) {
+      await updateProfile(auth.currentUser, { displayName: data.name }).catch(() => {});
+    }
     await syncUserDoc(data);
     return data;
   }, []);
@@ -77,6 +117,9 @@ export function AuthProvider({ children }) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Invalid PIN');
     await signInWithCustomToken(auth, data.customToken);
+    if (auth.currentUser && data.name) {
+      await updateProfile(auth.currentUser, { displayName: data.name }).catch(() => {});
+    }
     await syncUserDoc({ ...data, email });
     return data;
   }, []);
@@ -86,7 +129,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, role, ready, loginWithPassword, requestPin, signInWithPin, signOut }}>
+    <AuthContext.Provider value={{ user, profile, role, ready, loginWithPassword, requestPin, signInWithPin, signOut }}>
       {children}
     </AuthContext.Provider>
   );
@@ -129,7 +172,7 @@ export function useAuth() {
  * the viewer map if the signed-in role isn't in `allow`.
  */
 export function useRequireRole(allow) {
-  const { user, role, ready } = useAuth();
+  const { user, profile, role, ready } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -143,5 +186,11 @@ export function useRequireRole(allow) {
     }
   }, [ready, user, role, allow, router]);
 
-  return { user, role, ready, authorized: !!user && !!role && (!allow || allow.includes(role)) };
+  return {
+    user,
+    profile,
+    role,
+    ready,
+    authorized: !!user && !!role && (!allow || allow.includes(role)),
+  };
 }
