@@ -67,6 +67,8 @@ const allowedOrigins = [
   'http://127.0.0.1:3000',
   'http://127.0.0.1:5000',
   'https://jonobenjamin.github.io',
+  'https://khwaiprivate.okavangowater.com',
+  'https://khwai-private-reserve.vercel.app',
   ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()) : []),
 ];
 
@@ -78,7 +80,9 @@ app.use(
         allowedOrigins.includes(origin) ||
         allowedOrigins.includes('*') ||
         origin.endsWith('jonobenjamin.github.io') ||
-        origin.endsWith('.vercel.app')
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.okavangowater.com') ||
+        origin === 'https://okavangowater.com'
       ) {
         return cb(null, true);
       }

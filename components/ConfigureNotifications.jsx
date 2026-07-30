@@ -187,9 +187,10 @@ export default function ConfigureNotifications({ users = [] }) {
               </>
             ) : (
               <>
-                Resend is <strong>not configured</strong> on the server. Add{' '}
+                Resend is <strong>not configured</strong>. In Vercel set your Okavango Water{' '}
                 <code className="text-xs">RESEND_API_KEY</code> and{' '}
-                <code className="text-xs">RESEND_FROM_EMAIL</code> in Vercel, then redeploy.
+                <code className="text-xs">RESEND_FROM_EMAIL=alerts@okavangowater.com</code>, then
+                redeploy.
               </>
             )}
           </div>

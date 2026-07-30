@@ -43,16 +43,20 @@ production on that repo.
      (server-side only — used by `/api/okavango-water/*` to proxy historical water-extent PNGs;
      the partner key never reaches the browser)
 
-### Resend setup (new project for KPR)
+### Resend setup (Okavango Water domain)
 
-1. In [resend.com](https://resend.com) create an API key for this app (do not reuse another project's key unless you intend to).
-2. Add and verify a sending domain (or use Resend's onboarding domain for tests only).
-3. In Vercel → Environment Variables set:
-   - `RESEND_API_KEY=re_...`
-   - `RESEND_FROM_EMAIL=alerts@your-verified-domain.com`
+KPR emails must send from the already-verified **okavangowater.com** domain
+(site: `https://khwaiprivate.okavangowater.com`).
+
+1. In Vercel → Environment Variables (Production) set the **same** Resend API key you use for Okavango Water:
+   - `RESEND_API_KEY=re_...` (existing key)
+   - `RESEND_FROM_EMAIL=alerts@okavangowater.com`  
+     (any mailbox on `okavangowater.com` is fine — e.g. `khwai@okavangowater.com` —
+     as long as that domain is verified in Resend)
    - `EMAIL_FROM_NAME=KPR Wildlife Tracker`
-4. Redeploy, then on the live site go to **Admin → Configure Notifications** and add rules
-   (submission type → sub-items → users with email addresses).
+2. Redeploy.
+3. On the live site open **Admin → Configure Notifications** → confirm “Resend ready” → **Send test**.
+4. Add rules (submission type → sub-items → users with email addresses).
 4. Deploy. Vercel only builds the Next.js app — it ignores `docs/` (it's not referenced by
    `next.config.mjs` or `public/`), so having it in the repo doesn't affect the Vercel build.
 

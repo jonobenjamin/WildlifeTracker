@@ -67,7 +67,7 @@ class AuthService {
   async requestEmailPin(email, name) {
     try {
       console.log('Making PIN request for:', email);
-      const response = await fetch('https://khwai-private-reserve.vercel.app/api/auth/request-pin', {
+      const response = await fetch('https://khwaiprivate.okavangowater.com/api/auth/request-pin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -97,7 +97,7 @@ class AuthService {
   async verifyEmailPin(email, pin) {
     try {
       console.log('Making PIN verification request for:', email, 'PIN length:', pin.length);
-      const response = await fetch('https://khwai-private-reserve.vercel.app/api/auth/verify-pin', {
+      const response = await fetch('https://khwaiprivate.okavangowater.com/api/auth/verify-pin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
