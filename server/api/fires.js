@@ -66,12 +66,12 @@ function csvToGeoJSON(csvText) {
 // GET /api/fires - Fetch fire data from NASA FIRMS API
 router.get('/', async (req, res) => {
   try {
-    const days = Math.min(parseInt(req.query.days) || 3, 5); // Max 5 days for area API
+    const days = Math.min(parseInt(req.query.days) || 3, 10); // FIRMS NRT area API allows up to 10 days
 
-    // Continental USA bounding box
-    const bbox = '-125,24,-66,49';
+    // Khwai Private Reserve / Okavango Delta region, Botswana (with padding around the concession)
+    const bbox = req.query.bbox || '22.5,-20.2,24.6,-18.0';
 
-    console.log(`Fetching fire data for USA (bbox: ${bbox}), last ${days} days`);
+    console.log(`Fetching fire data for KPR region (bbox: ${bbox}), last ${days} days`);
 
     const BASE_URL = "https://firms.modaps.eosdis.nasa.gov/api/area/csv";
 

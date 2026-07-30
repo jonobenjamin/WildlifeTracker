@@ -8,6 +8,27 @@ import { listUsers, createUser, updateUser, setUserStatus, deleteUser } from '@/
 import dayjs from 'dayjs';
 
 const ROLES = ['admin', 'user', 'viewer'];
+const MONTHS = [
+  ['01', 'January'],
+  ['02', 'February'],
+  ['03', 'March'],
+  ['04', 'April'],
+  ['05', 'May'],
+  ['06', 'June'],
+  ['07', 'July'],
+  ['08', 'August'],
+  ['09', 'September'],
+  ['10', 'October'],
+  ['11', 'November'],
+  ['12', 'December'],
+];
+
+function yearOptions() {
+  const current = new Date().getFullYear();
+  const years = [];
+  for (let y = current; y >= 2020; y--) years.push(y);
+  return years;
+}
 
 export default function AdminPage() {
   const { authorized } = useRequireRole(['admin']);
@@ -20,6 +41,8 @@ export default function AdminPage() {
   const [editing, setEditing] = useState(null);
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [subMonth, setSubMonth] = useState('');
+  const [subYear, setSubYear] = useState('');
 
   async function refresh() {
     setLoading(true);
@@ -40,14 +63,37 @@ export default function AdminPage() {
     if (authorized) refresh();
   }, [authorized]);
 
-  const submissionCounts = useMemo(() => {
-    const byCategory = { sighting: 0, incident: 0, maintenance: 0 };
-    observations.forEach((o) => {
-      const cat = (o.category || '').toLowerCase();
-      if (byCategory[cat] !== undefined) byCategory[cat] += 1;
+  const filteredObservations = useMemo(() => {
+    if (!subMonth && !subYear) return observations;
+    return observations.filter((o) => {
+      if (!o.timestamp) return false;
+      const d = dayjs(o.timestamp);
+      if (!d.isValid()) return false;
+      if (subMonth && d.format('MM') !== subMonth) return false;
+      if (subYear && String(d.year()) !== subYear) return false;
+      return true;
     });
-    return byCategory;
-  }, [observations]);
+  }, [observations, subMonth, subYear]);
+
+  const userSubmissionCounts = useMemo(() => {
+    const map = {};
+    users.forEach((u) => {
+      const label = (u.name || u.email || u.phone || '').toLowerCase().trim();
+      if (!label) {
+        map[u.id] = { sightings: 0, incidents: 0, maintenance: 0, total: 0 };
+        return;
+      }
+      const mine = filteredObservations.filter((o) => {
+        const ou = (o.user || '').toLowerCase().trim();
+        return ou && (ou.includes(label) || label.includes(ou));
+      });
+      const sightings = mine.filter((o) => (o.category || '').toLowerCase() === 'sighting').length;
+      const incidents = mine.filter((o) => (o.category || '').toLowerCase() === 'incident').length;
+      const maintenance = mine.filter((o) => (o.category || '').toLowerCase() === 'maintenance').length;
+      map[u.id] = { sightings, incidents, maintenance, total: sightings + incidents + maintenance };
+    });
+    return map;
+  }, [users, filteredObservations]);
 
   async function handleStatusToggle(u) {
     setBusyId(u.id);
@@ -79,14 +125,11 @@ export default function AdminPage() {
   return (
     <AppShell title="Submissions & Users">
       <div className="space-y-6">
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           {[
-            ['Total users', stats.total],
-            ['Active', stats.active],
-            ['Revoked', stats.revoked],
-            ['Sightings', submissionCounts.sighting],
-            ['Incidents', submissionCounts.incident],
-            ['Maintenance', submissionCounts.maintenance],
+            ['Total Users', stats.total],
+            ['Active Users', stats.active],
+            ['Revoked Users', stats.revoked],
           ].map(([label, n]) => (
             <div key={label} className="kpr-card p-4 text-center">
               <div className="text-2xl font-bold" style={{ color: 'var(--kpr-green-light)' }}>
@@ -98,11 +141,39 @@ export default function AdminPage() {
         </div>
 
         <section className="kpr-card p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
             <h2 className="text-base font-semibold">Users</h2>
             <button className="kpr-btn" onClick={() => setCreating(true)}>
               + Add user
             </button>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3 mb-4 pb-4 border-b border-portal-border">
+            <div>
+              <h3 className="kpr-label mb-1">User Submission Filter</h3>
+            </div>
+            <div>
+              <label className="block text-[11px] text-portal-text-muted mb-1">Month</label>
+              <select className="kpr-input" value={subMonth} onChange={(e) => setSubMonth(e.target.value)}>
+                <option value="">All Months</option>
+                {MONTHS.map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] text-portal-text-muted mb-1">Year</label>
+              <select className="kpr-input" value={subYear} onChange={(e) => setSubYear(e.target.value)}>
+                <option value="">All Years</option>
+                {yearOptions().map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {loading ? (
@@ -118,50 +189,67 @@ export default function AdminPage() {
                     <th className="text-left px-3 py-2.5">Email / phone</th>
                     <th className="text-left px-3 py-2.5">Role</th>
                     <th className="text-left px-3 py-2.5">Status</th>
+                    <th className="text-left px-3 py-2.5">Registered</th>
                     <th className="text-left px-3 py-2.5">Last login</th>
+                    <th className="text-right px-3 py-2.5">Sightings</th>
+                    <th className="text-right px-3 py-2.5">Incidents</th>
+                    <th className="text-right px-3 py-2.5">Maintenance</th>
+                    <th className="text-right px-3 py-2.5">Total</th>
                     <th className="text-left px-3 py-2.5">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((u) => (
-                    <tr key={u.id} className="border-t border-portal-border">
-                      <td className="px-3 py-2.5 font-medium">{u.name}</td>
-                      <td className="px-3 py-2.5">{u.email || u.phone || '—'}</td>
-                      <td className="px-3 py-2.5 capitalize">{u.role}</td>
-                      <td className="px-3 py-2.5">
-                        <span
-                          className={`kpr-badge ${
-                            u.status === 'revoked' ? 'bg-red-100 text-portal-danger' : 'bg-green-100 text-green-800'
-                          }`}
-                        >
-                          {u.status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2.5 text-portal-text-muted">{u.lastLogin ? dayjs(u.lastLogin).format('DD MMM YYYY') : '—'}</td>
-                      <td className="px-3 py-2.5 space-x-2 whitespace-nowrap">
-                        <button className="text-xs font-semibold" style={{ color: 'var(--kpr-green)' }} onClick={() => setEditing(u)}>
-                          Edit
-                        </button>
-                        <button
-                          className="text-xs font-semibold text-amber-700 disabled:opacity-50"
-                          disabled={busyId === u.id}
-                          onClick={() => handleStatusToggle(u)}
-                        >
-                          {u.status === 'revoked' ? 'Restore' : 'Revoke'}
-                        </button>
-                        <button
-                          className="text-xs font-semibold text-portal-danger disabled:opacity-50"
-                          disabled={busyId === u.id}
-                          onClick={() => handleDelete(u)}
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {users.map((u) => {
+                    const counts = userSubmissionCounts[u.id] || { sightings: 0, incidents: 0, maintenance: 0, total: 0 };
+                    return (
+                      <tr key={u.id} className="border-t border-portal-border">
+                        <td className="px-3 py-2.5 font-medium">{u.name}</td>
+                        <td className="px-3 py-2.5">{u.email || u.phone || '—'}</td>
+                        <td className="px-3 py-2.5 capitalize">{u.role}</td>
+                        <td className="px-3 py-2.5">
+                          <span
+                            className={`kpr-badge ${
+                              u.status === 'revoked' ? 'bg-red-100 text-portal-danger' : 'bg-green-100 text-green-800'
+                            }`}
+                          >
+                            {u.status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-portal-text-muted">
+                          {u.registeredAt ? dayjs(u.registeredAt).format('DD/MM/YYYY') : '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-portal-text-muted">
+                          {u.lastLogin ? dayjs(u.lastLogin).format('DD MMM YYYY, HH:mm') : '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">{counts.sightings}</td>
+                        <td className="px-3 py-2.5 text-right">{counts.incidents}</td>
+                        <td className="px-3 py-2.5 text-right">{counts.maintenance}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold">{counts.total}</td>
+                        <td className="px-3 py-2.5 space-x-2 whitespace-nowrap">
+                          <button className="text-xs font-semibold" style={{ color: 'var(--kpr-green)' }} onClick={() => setEditing(u)}>
+                            Edit
+                          </button>
+                          <button
+                            className="text-xs font-semibold text-amber-700 disabled:opacity-50"
+                            disabled={busyId === u.id}
+                            onClick={() => handleStatusToggle(u)}
+                          >
+                            {u.status === 'revoked' ? 'Restore' : 'Revoke'}
+                          </button>
+                          <button
+                            className="text-xs font-semibold text-portal-danger disabled:opacity-50"
+                            disabled={busyId === u.id}
+                            onClick={() => handleDelete(u)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {users.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-6 text-center text-portal-text-muted">
+                      <td colSpan={11} className="px-3 py-6 text-center text-portal-text-muted">
                         No users yet.
                       </td>
                     </tr>

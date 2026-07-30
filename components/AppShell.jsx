@@ -108,7 +108,10 @@ export default function AppShell({ title, children }) {
         <main className="flex-1 p-6 min-w-0">{children}</main>
 
         <footer className="px-6 py-3 text-xs text-portal-text-muted border-t border-portal-border bg-white">
-          KPR Wildlife Monitoring · Khwai Private Reserve
+          © {new Date().getFullYear()} Khwai Private Reserve Monitoring System | Developed by{' '}
+          <a href="https://okavangowater.com" target="_blank" rel="noreferrer" className="font-semibold" style={{ color: 'var(--kpr-green)' }}>
+            okavangowater.com
+          </a>
         </footer>
       </div>
     </div>

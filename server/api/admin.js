@@ -18,8 +18,15 @@ const requireAdmin = (req, res, next) => {
   // Check for admin API key in header (same as map dashboard uses)
   const adminKey = req.headers['x-api-key'];
 
-  // Use environment variable for admin key, fallback to a default for development
-  const expectedAdminKey = process.env.ADMIN_API_KEY || 'wildlife_admin_2024';
+  // No insecure fallback — ADMIN_API_KEY must be configured in the environment.
+  const expectedAdminKey = process.env.ADMIN_API_KEY || '';
+  if (!expectedAdminKey) {
+    console.error('🚫 ADMIN_API_KEY is not set in the environment — refusing all admin requests.');
+    return res.status(500).json({
+      success: false,
+      message: 'Server misconfiguration: ADMIN_API_KEY is not set',
+    });
+  }
 
   console.log('🔑 Received API key:', adminKey ? '***' + adminKey.slice(-4) : 'NONE');
   console.log('🔑 Expected API key ends with:', '***' + expectedAdminKey.slice(-4));
