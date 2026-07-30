@@ -1,12 +1,12 @@
 /**
- * Fetches fire data from NASA FIRMS for the KPR concession bbox,
- * then keeps only points that fall inside the concession polygon.
+ * Fetches fire data from NASA FIRMS for the Okavango Delta AOI,
+ * then keeps only points inside Oka_Delta.geojson.
  */
-const { getConcessionFirmsBbox, filterFiresInConcession } = require('./concessionBoundary');
+const { getFireFirmsBbox, filterFiresInFireArea } = require('./concessionBoundary');
 
 async function fetchFireData(days = 3) {
   const daysParam = Math.min(parseInt(days, 10) || 3, 3);
-  const bbox = getConcessionFirmsBbox();
+  const bbox = getFireFirmsBbox();
   const BASE_URL = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv';
   const mapKey = (process.env.FIRMS_MAP_KEY || '').trim().replace(/^["']|["']$/g, '');
 
@@ -43,6 +43,7 @@ async function fetchFireData(days = 3) {
   const products = [
     ['VIIRS_SNPP_NRT', 'VIIRS'],
     ['VIIRS_NOAA20_NRT', 'VIIRS'],
+    ['VIIRS_NOAA21_NRT', 'VIIRS'],
     ['MODIS_NRT', 'MODIS'],
   ];
   const all = [];
@@ -64,7 +65,7 @@ async function fetchFireData(days = 3) {
     }
   }
 
-  return filterFiresInConcession(all);
+  return filterFiresInFireArea(all);
 }
 
 module.exports = { fetchFireData };

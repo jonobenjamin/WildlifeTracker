@@ -17,7 +17,8 @@ async function getRecipientEmailsForEvent({ category, item }) {
 
   let snap;
   try {
-    snap = await db.collection(COLLECTION).where('enabled', '==', true).get();
+    // Load all rules then filter in memory (avoids index / enabled-field edge cases).
+    snap = await db.collection(COLLECTION).get();
   } catch (err) {
     console.error('Failed to load notification rules:', err.message);
     return [];
@@ -28,6 +29,7 @@ async function getRecipientEmailsForEvent({ category, item }) {
 
   for (const doc of snap.docs) {
     const rule = doc.data() || {};
+    if (rule.enabled === false) continue;
     if (String(rule.category || '').toLowerCase() !== cat) continue;
 
     const items = Array.isArray(rule.items) ? rule.items : [];
@@ -36,7 +38,8 @@ async function getRecipientEmailsForEvent({ category, item }) {
       itemNorm &&
       items.some((i) => {
         const s = String(i).trim().toLowerCase();
-        if (s === 'any fire in concession' && cat === 'fire') return true;
+        // Fire rules: any fire-area wording matches
+        if (cat === 'fire' && s.includes('fire')) return true;
         return s === itemNorm;
       });
 
@@ -45,6 +48,10 @@ async function getRecipientEmailsForEvent({ category, item }) {
       if (id) userIds.add(String(id));
     });
   }
+
+  console.log(
+    `[notifications] category=${cat} item=${itemNorm || '(none)'} matchedUsers=${userIds.size} rulesScanned=${snap.size}`
+  );
 
   if (userIds.size === 0) return [];
 

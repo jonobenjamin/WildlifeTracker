@@ -128,8 +128,9 @@ export default function ConcessionMapPage() {
     mapObj.current.L = L;
     setMapReady({ map, L });
     try {
-      const [boundary, roads, camps, poi] = await Promise.all([
+      const [boundary, okaDelta, roads, camps, poi] = await Promise.all([
         fetchGeoJson('/data/geojson/Consession_boundary.geojson'),
+        fetchGeoJson('/data/geojson/Oka_Delta.geojson').catch(() => null),
         fetchGeoJson('/data/geojson/KPR_roads.geojson'),
         fetchGeoJson('/data/geojson/Camps.geojson'),
         fetchGeoJson('/data/geojson/KPR_POI.geojson').catch(() => null),
@@ -139,6 +140,13 @@ export default function ConcessionMapPage() {
         style: { color: '#4c1918', weight: 2.5, fillOpacity: 0.03 },
       }).addTo(map);
       map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20] });
+
+      if (okaDelta) {
+        mapObj.current.okaDeltaLayer = L.geoJSON(okaDelta, {
+          style: { color: '#1d4ed8', weight: 1.5, dashArray: '6 4', fillOpacity: 0.02 },
+        });
+        mapObj.current.okaDeltaBounds = mapObj.current.okaDeltaLayer.getBounds();
+      }
 
       mapObj.current.baseLayers.roads = L.geoJSON(roads, {
         style: { color: '#8a6d3b', weight: 1.5, opacity: 0.8 },
@@ -208,6 +216,9 @@ export default function ConcessionMapPage() {
       if (mapObj.current.fireLayer) {
         map.removeLayer(mapObj.current.fireLayer);
         mapObj.current.fireLayer = null;
+      }
+      if (mapObj.current.okaDeltaLayer && map.hasLayer(mapObj.current.okaDeltaLayer) && viewMode !== 'fires') {
+        map.removeLayer(mapObj.current.okaDeltaLayer);
       }
       mapObj.current.waterMarkers.forEach((m) => map.removeLayer(m));
       mapObj.current.waterMarkers = [];
@@ -295,6 +306,12 @@ export default function ConcessionMapPage() {
         });
         mapObj.current.waterMarkers = markers;
       } else if (viewMode === 'fires') {
+        if (mapObj.current.okaDeltaLayer && !map.hasLayer(mapObj.current.okaDeltaLayer)) {
+          mapObj.current.okaDeltaLayer.addTo(map);
+        }
+        if (mapObj.current.okaDeltaBounds) {
+          map.fitBounds(mapObj.current.okaDeltaBounds, { padding: [24, 24] });
+        }
         const filtered = fires.filter((f) => !fireSensor || f.properties?.sensor === fireSensor);
         const markers = filtered
           .filter((f) => f.geometry?.coordinates)
@@ -316,6 +333,7 @@ export default function ConcessionMapPage() {
             return marker;
           });
         mapObj.current.fireLayer = L.layerGroup(markers).addTo(map);
+        setTotal(filtered.length);
       }
     })();
 

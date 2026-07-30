@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { sendFireNotifications } = require('../services/notificationServices');
-const { getConcessionFirmsBbox, filterFiresInConcession } = require('../services/concessionBoundary');
+const { getFireFirmsBbox, filterFiresInFireArea } = require('../services/concessionBoundary');
 
 // Daily fire check - invoked by Vercel cron at 4:00 UTC.
-// Emails ONLY for fires inside the KPR concession boundary polygon.
+// Emails for fires inside the Okavango Delta (Oka_Delta.geojson) AOI.
 router.get('/', async (req, res) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
@@ -16,17 +16,18 @@ router.get('/', async (req, res) => {
   }
 
   try {
-    console.log('[CronFireCheck] Running scheduled fire check (concession-only alerts)...');
+    console.log('[CronFireCheck] Running scheduled fire check (Oka_Delta AOI)...');
 
     const mapKey = (process.env.FIRMS_MAP_KEY || '').trim().replace(/^["']|["']$/g, '');
     if (!mapKey) throw new Error('FIRMS_MAP_KEY not configured');
 
-    const bbox = getConcessionFirmsBbox();
+    const bbox = getFireFirmsBbox();
     const days = 3;
     const BASE_URL = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv';
     const products = [
       ['VIIRS_SNPP_NRT', 'VIIRS'],
       ['VIIRS_NOAA20_NRT', 'VIIRS'],
+      ['VIIRS_NOAA21_NRT', 'VIIRS'],
       ['MODIS_NRT', 'MODIS'],
     ];
 
@@ -46,20 +47,20 @@ router.get('/', async (req, res) => {
       }
     }
 
-    const inConcession = filterFiresInConcession(features);
-    console.log(`[CronFireCheck] fetched=${features.length} inConcession=${inConcession.length}`);
+    const inFireArea = filterFiresInFireArea(features);
+    console.log(`[CronFireCheck] fetched=${features.length} inFireArea=${inFireArea.length}`);
 
     let notificationResults = null;
-    if (inConcession.length > 0) {
-      notificationResults = await sendFireNotifications(inConcession);
+    if (inFireArea.length > 0) {
+      notificationResults = await sendFireNotifications(inFireArea);
     } else {
-      console.log('[CronFireCheck] No fires inside concession — skipping email alerts');
+      console.log('[CronFireCheck] No fires inside Oka_Delta — skipping email alerts');
     }
 
     res.status(200).json({
       success: true,
       firesFetched: features.length,
-      firesInConcession: inConcession.length,
+      firesInFireArea: inFireArea.length,
       notificationsSent: notificationResults?.email?.success ?? false,
       timestamp: new Date().toISOString(),
     });

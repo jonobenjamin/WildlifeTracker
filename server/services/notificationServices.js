@@ -1,4 +1,4 @@
-const { pointInConcession, fireCoords } = require('./concessionBoundary');
+const { pointInFireArea, fireCoords } = require('./concessionBoundary');
 const { sendResendEmail, buildAlertHtml, isConfigured } = require('./resendEmail');
 const { getRecipientEmailsForEvent, envFallbackEmails } = require('./notificationRules');
 
@@ -100,10 +100,10 @@ const formatFireDetails = (fireData) => {
 };
 
 const getFireRegion = (latitude, longitude) => {
-  if (pointInConcession(Number(latitude), Number(longitude))) {
-    return 'Khwai Private Reserve (concession)';
+  if (pointInFireArea(Number(latitude), Number(longitude))) {
+    return 'Okavango Delta';
   }
-  return 'Outside concession';
+  return 'Outside Okavango Delta AOI';
 };
 
 async function resolveRecipients(category, item) {
@@ -248,7 +248,7 @@ const isPoachingIncident = (incidentData) => {
 };
 
 const sendFireAlertNotification = async (fireData) => {
-  const recipients = await resolveRecipients('fire', 'Any fire in concession');
+  const recipients = await resolveRecipients('fire', 'Any fire in Okavango Delta / KPR');
   const details = formatFireDetails(fireData);
   const count = details.fireCount || 1;
   const subject = count > 1 ? `FIRE ALERT — ${count} detections — KPR` : 'FIRE ALERT — KPR';
@@ -276,7 +276,7 @@ const sendFireAlertNotification = async (fireData) => {
 };
 
 const sendFireNotifications = async (firesData) => {
-  console.log('Evaluating fire alert emails (concession-only, Resend)...');
+  console.log('Evaluating fire alert emails (Oka_Delta AOI, Resend)...');
 
   const results = {
     email: null,
@@ -286,11 +286,11 @@ const sendFireNotifications = async (firesData) => {
 
   const monitoredFires = (firesData || []).filter((fire) => {
     const { lat, lon } = fireCoords(fire);
-    return !Number.isNaN(lat) && !Number.isNaN(lon) && pointInConcession(lat, lon);
+    return !Number.isNaN(lat) && !Number.isNaN(lon) && pointInFireArea(lat, lon);
   });
 
   if (monitoredFires.length > 0) {
-    console.log(`${monitoredFires.length} fire(s) inside concession — sending alerts`);
+    console.log(`${monitoredFires.length} fire(s) inside Oka_Delta — sending alerts`);
     try {
       const first = monitoredFires[0];
       const { lat, lon } = fireCoords(first);
@@ -298,7 +298,7 @@ const sendFireNotifications = async (firesData) => {
         properties: {
           ...first.properties,
           fireCount: monitoredFires.length,
-          message: `${monitoredFires.length} fire(s) detected inside KPR concession`,
+          message: `${monitoredFires.length} fire(s) detected inside Okavango Delta AOI`,
           latitude: lat,
           longitude: lon,
         },
@@ -309,8 +309,8 @@ const sendFireNotifications = async (firesData) => {
       results.email = { success: false, error: error.message };
     }
   } else {
-    console.log('No fires inside concession boundary — no email alerts');
-    results.email = { success: true, reason: 'No fires inside concession' };
+    console.log('No fires inside Oka_Delta — no email alerts');
+    results.email = { success: true, reason: 'No fires inside Oka_Delta' };
   }
 
   return results;

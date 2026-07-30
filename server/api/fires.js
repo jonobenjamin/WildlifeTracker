@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getConcessionFirmsBbox, filterFiresInConcession } = require('../services/concessionBoundary');
+const { getFireFirmsBbox, filterFiresInFireArea } = require('../services/concessionBoundary');
 
 module.exports = (db) => {
   const validateApiKey = (req, res, next) => {
@@ -70,11 +70,11 @@ module.exports = (db) => {
     }
   }
 
-  // GET /api/fires — map display only; results clipped to concession boundary polygon.
+  // GET /api/fires — clipped to Okavango Delta (Oka_Delta.geojson) AOI.
   router.get('/', async (req, res) => {
     try {
       const days = Math.min(Math.max(parseInt(req.query.days, 10) || 3, 1), 3);
-      const bbox = (req.query.bbox || getConcessionFirmsBbox()).trim();
+      const bbox = (req.query.bbox || getFireFirmsBbox()).trim();
       const mapKey = (process.env.FIRMS_MAP_KEY || '').trim().replace(/^["']|["']$/g, '');
 
       if (!mapKey) {
@@ -85,7 +85,7 @@ module.exports = (db) => {
         });
       }
 
-      const products = ['VIIRS_SNPP_NRT', 'VIIRS_NOAA20_NRT', 'MODIS_NRT'];
+      const products = ['VIIRS_SNPP_NRT', 'VIIRS_NOAA20_NRT', 'VIIRS_NOAA21_NRT', 'MODIS_NRT'];
       const features = [];
       const errors = [];
 
@@ -116,16 +116,17 @@ module.exports = (db) => {
         });
       }
 
-      const inConcession = filterFiresInConcession(features);
+      const inFireArea = filterFiresInFireArea(features);
 
       return res.status(200).json({
         type: 'FeatureCollection',
-        features: inConcession,
+        features: inFireArea,
         meta: {
           days,
           bbox,
+          area: 'Oka_Delta',
           fetched: features.length,
-          inConcession: inConcession.length,
+          inFireArea: inFireArea.length,
           sourcesTried: products,
           sourceErrors: errors,
         },

@@ -101548,7 +101548,7 @@ p.rH(r==null?s:r)},
 AI(){var s=0,r=A.I(t.H)
 var $async$AI=A.J(function(a,b){if(a===1)return A.F(b,r)
 for(;;)switch(s){case 0:s=2
-return A.t(A.qy("https://wildlife-tracker-gxz5.vercel.app",u.m),$async$AI)
+return A.t(A.qy("https://khwai-private-reserve.vercel.app",u.m),$async$AI)
 case 2:return A.G(null,r)}})
 return A.H($async$AI,r)},
 w5(a){return this.ao4(a)},
@@ -101556,7 +101556,7 @@ ao3(){return this.w5(!1)},
 ao4(a){var s=0,r=A.I(t.H),q,p=this,o
 var $async$w5=A.J(function(b,c){if(b===1)return A.F(c,r)
 for(;;)switch(s){case 0:s=3
-return A.t(A.qy("https://wildlife-tracker-gxz5.vercel.app",u.m),$async$w5)
+return A.t(A.qy("https://khwai-private-reserve.vercel.app",u.m),$async$w5)
 case 3:if(p.c==null){s=1
 break}o=A.l7()
 p.I(new A.aCS(p))
@@ -101593,7 +101593,7 @@ s=1
 break}o=p.c
 if(o!=null)o.W(t.q).f.bp(B.Zx)
 s=3
-return A.t(A.qy("https://wildlife-tracker-gxz5.vercel.app",u.m),$async$Az)
+return A.t(A.qy("https://khwai-private-reserve.vercel.app",u.m),$async$Az)
 case 3:if(p.c==null){s=1
 break}n=A.l7()
 p.I(new A.aCH(p))
@@ -102072,7 +102072,7 @@ s=1
 break}m.I(new A.aFG(m))
 p=4
 s=7
-return A.t(A.Ss("https://wildlife-tracker-gxz5.vercel.app",u.m),$async$AE)
+return A.t(A.Ss("https://khwai-private-reserve.vercel.app",u.m),$async$AE)
 case 7:l=b
 j=m.c
 if(j!=null){i=l?"All records synced to server":"Sync failed \u2014 try again"

@@ -300,7 +300,7 @@ export default function MapFilterPanel({
             <div className="text-2xl font-bold" style={{ color: 'var(--kpr-green-light)' }}>
               {fireCount}
             </div>
-            <div className="text-xs text-portal-text-muted mt-1">Total Fires</div>
+            <div className="text-xs text-portal-text-muted mt-1">Fires in Okavango Delta</div>
           </div>
           <button className="kpr-btn w-full" disabled={firesLoading} onClick={onRefreshFires}>
             {firesLoading ? 'Refreshing…' : 'Refresh Fire Data'}
