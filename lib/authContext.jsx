@@ -32,6 +32,11 @@ export function AuthProvider({ children }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    if (!auth) {
+      // SSR / missing client Firebase — mark ready so pages can render
+      setReady(true);
+      return undefined;
+    }
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
         setUser(null);
@@ -42,6 +47,7 @@ export function AuthProvider({ children }) {
       }
       setUser(u);
       try {
+        if (!db) throw new Error('Firestore not available');
         const snap = await getDoc(doc(db, 'users', u.uid));
         if (snap.exists()) {
           const data = snap.data();
@@ -82,6 +88,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const loginWithPassword = useCallback(async (name, password) => {
+    if (!auth) throw new Error('Firebase Auth is not available in this browser');
     const res = await fetch(apiUrl('/api/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -109,6 +116,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signInWithPin = useCallback(async (email, pin) => {
+    if (!auth) throw new Error('Firebase Auth is not available in this browser');
     const res = await fetch(apiUrl('/api/auth/verify-pin'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -125,6 +133,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (!auth) return;
     await firebaseSignOut(auth);
   }, []);
 
@@ -136,6 +145,7 @@ export function AuthProvider({ children }) {
 }
 
 async function syncUserDoc(data) {
+  if (!auth || !db) return;
   const user = auth.currentUser;
   if (!user) return;
   try {
