@@ -1,11 +1,12 @@
 /**
- * Fetches fire data from NASA FIRMS API.
- * Used by both /api/fires (dashboard) and /api/cron/fire-alerts (scheduled notifications).
+ * Fetches fire data from NASA FIRMS for the KPR concession bbox,
+ * then keeps only points that fall inside the concession polygon.
  */
+const { getConcessionFirmsBbox, filterFiresInConcession } = require('./concessionBoundary');
+
 async function fetchFireData(days = 3) {
-  const daysParam = Math.min(parseInt(days) || 3, 7);
-  // west,south,east,north — Khwai / Okavango region (not USA)
-  const bbox = '22.5,-20.2,24.6,-18.0';
+  const daysParam = Math.min(parseInt(days, 10) || 3, 7);
+  const bbox = getConcessionFirmsBbox();
   const BASE_URL = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv';
   const mapKey = (process.env.FIRMS_MAP_KEY || '').trim().replace(/^["']|["']$/g, '');
 
@@ -14,54 +15,56 @@ async function fetchFireData(days = 3) {
   }
 
   function csvToGeoJSON(csvText) {
-    const lines = csvText.trim().split('\n');
+    const text = String(csvText || '').trim();
+    if (!text || text.startsWith('<!DOCTYPE')) throw new Error('FIRMS returned HTML instead of CSV');
+    const lines = text.split(/\r?\n/).filter(Boolean);
     if (lines.length < 2) return { type: 'FeatureCollection', features: [] };
-    const headers = lines[0].split(',');
+    const headers = lines[0].split(',').map((h) => h.trim());
     const features = [];
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',');
-      if (values.length !== headers.length) continue;
+      if (values.length < headers.length) continue;
       const properties = {};
       headers.forEach((header, index) => {
-        properties[header.trim()] = values[index].trim();
+        properties[header] = (values[index] || '').trim();
       });
       const lat = parseFloat(properties.latitude);
       const lng = parseFloat(properties.longitude);
-      if (!isNaN(lat) && !isNaN(lng)) {
-        features.push({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [lng, lat] },
-          properties: { ...properties, sensor: properties.instrument || 'Unknown' }
-        });
-      }
+      if (Number.isNaN(lat) || Number.isNaN(lng)) continue;
+      features.push({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [lng, lat] },
+        properties: { ...properties, sensor: properties.instrument || 'Unknown' },
+      });
     }
     return { type: 'FeatureCollection', features };
   }
 
-  const viirsUrl = `${BASE_URL}/${mapKey}/VIIRS_SNPP_NRT/${bbox}/${daysParam}`;
-  const viirsRes = await fetch(viirsUrl);
-  if (!viirsRes.ok) throw new Error(`VIIRS failed: ${viirsRes.status}`);
-  const viirsText = await viirsRes.text();
-  if (viirsText.trim().startsWith('<!DOCTYPE')) throw new Error('FIRMS returned HTML instead of CSV');
-  const viirsData = csvToGeoJSON(viirsText);
+  const products = [
+    ['VIIRS_SNPP_NRT', 'VIIRS'],
+    ['VIIRS_NOAA20_NRT', 'VIIRS'],
+    ['MODIS_NRT', 'MODIS'],
+  ];
+  const all = [];
+  for (const [product, sensor] of products) {
+    const url = `${BASE_URL}/${mapKey}/${product}/${bbox}/${daysParam}`;
+    const res = await fetch(url);
+    if (!res.ok) continue;
+    const text = await res.text();
+    try {
+      const data = csvToGeoJSON(text);
+      all.push(
+        ...(data.features || []).map((f) => ({
+          ...f,
+          properties: { ...f.properties, sensor },
+        }))
+      );
+    } catch {
+      // skip bad product response
+    }
+  }
 
-  const modisUrl = `${BASE_URL}/${mapKey}/MODIS_NRT/${bbox}/${daysParam}`;
-  const modisRes = await fetch(modisUrl);
-  if (!modisRes.ok) throw new Error(`MODIS failed: ${modisRes.status}`);
-  const modisText = await modisRes.text();
-  if (modisText.trim().startsWith('<!DOCTYPE')) throw new Error('FIRMS returned HTML instead of CSV');
-  const modisData = csvToGeoJSON(modisText);
-
-  const viirsFeatures = (viirsData.features || []).map(f => ({
-    ...f,
-    properties: { ...f.properties, sensor: 'VIIRS' }
-  }));
-  const modisFeatures = (modisData.features || []).map(f => ({
-    ...f,
-    properties: { ...f.properties, sensor: 'MODIS' }
-  }));
-
-  return [...viirsFeatures, ...modisFeatures];
+  return filterFiresInConcession(all);
 }
 
 module.exports = { fetchFireData };

@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { getConcessionFirmsBbox, filterFiresInConcession } = require('../services/concessionBoundary');
 
 module.exports = (db) => {
   const validateApiKey = (req, res, next) => {
@@ -20,7 +21,6 @@ module.exports = (db) => {
     if (!text || text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
       throw new Error('FIRMS returned HTML instead of CSV — check FIRMS_MAP_KEY');
     }
-    // Invalid / expired keys often return a short plain-text error, not CSV.
     if (/invalid|denied|unauthorized|error/i.test(text) && !text.includes('latitude')) {
       throw new Error(text.slice(0, 200));
     }
@@ -70,12 +70,11 @@ module.exports = (db) => {
     }
   }
 
-  // GET /api/fires — map display only. Email alerts belong on the cron route, not here.
+  // GET /api/fires — map display only; results clipped to concession boundary polygon.
   router.get('/', async (req, res) => {
     try {
       const days = Math.min(Math.max(parseInt(req.query.days, 10) || 3, 1), 7);
-      // west,south,east,north — padded Khwai / Okavango region
-      const bbox = (req.query.bbox || '22.5,-20.2,24.6,-18.0').trim();
+      const bbox = (req.query.bbox || getConcessionFirmsBbox()).trim();
       const mapKey = (process.env.FIRMS_MAP_KEY || '').trim().replace(/^["']|["']$/g, '');
 
       if (!mapKey) {
@@ -117,10 +116,19 @@ module.exports = (db) => {
         });
       }
 
+      const inConcession = filterFiresInConcession(features);
+
       return res.status(200).json({
         type: 'FeatureCollection',
-        features,
-        meta: { days, bbox, sourcesTried: products, sourceErrors: errors },
+        features: inConcession,
+        meta: {
+          days,
+          bbox,
+          fetched: features.length,
+          inConcession: inConcession.length,
+          sourcesTried: products,
+          sourceErrors: errors,
+        },
       });
     } catch (error) {
       console.error('Error fetching fire data:', error);

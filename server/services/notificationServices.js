@@ -1,4 +1,5 @@
 const emailjs = require('@emailjs/nodejs');
+const { pointInConcession, fireCoords } = require('./concessionBoundary');
 
 // Initialize EmailJS
 const initializeEmailJS = () => {
@@ -67,16 +68,13 @@ const formatIncidentDetails = (incidentData) => {
 
 // Format fire details for notification
 const formatFireDetails = (fireData) => {
-  const {
-    latitude,
-    longitude,
-    brightness,
-    confidence,
-    frp,
-    sensor,
-    acq_date,
-    acq_time
-  } = fireData.properties || fireData;
+  const props = fireData.properties || fireData;
+  const { lat: resolvedLat, lon: resolvedLon } = fireCoords(
+    fireData.geometry ? fireData : { geometry: { coordinates: [props.longitude, props.latitude] }, properties: props }
+  );
+  const latitude = resolvedLat;
+  const longitude = resolvedLon;
+  const { brightness, confidence, frp, sensor, acq_date, acq_time } = props;
 
   const mapsLink = generateGoogleMapsLink(latitude, longitude);
 
@@ -108,39 +106,12 @@ const formatFireDetails = (fireData) => {
   };
 };
 
-// Determine which region a fire is in
+// Determine which region a fire is in — alerts only for the concession polygon.
 const getFireRegion = (latitude, longitude) => {
-  // Check if fire is in Botswana (KPR concession area)
-  const botswanaBounds = {
-    north: -17.8,
-    south: -26.9,
-    west: 19.9,
-    east: 29.4
-  };
-
-  if (latitude >= botswanaBounds.south &&
-      latitude <= botswanaBounds.north &&
-      longitude >= botswanaBounds.west &&
-      longitude <= botswanaBounds.east) {
-    return 'Botswana (KPR Concession Area)';
+  if (pointInConcession(Number(latitude), Number(longitude))) {
+    return 'Khwai Private Reserve (concession)';
   }
-
-  // Check if fire is in USA
-  const usaBounds = {
-    north: 49,
-    south: 24,
-    west: -125,
-    east: -66
-  };
-
-  if (latitude >= usaBounds.south &&
-      latitude <= usaBounds.north &&
-      longitude >= usaBounds.west &&
-      longitude <= usaBounds.east) {
-    return 'United States';
-  }
-
-  return 'Other Region';
+  return 'Outside concession';
 };
 
 // Send email notification using EmailJS
@@ -324,9 +295,9 @@ const sendFireAlertNotification = async (fireData) => {
   }
 };
 
-// Main function to send notifications for fire alerts (Botswana/KPR and USA)
+// Main function to send notifications — ONLY for fires inside the concession boundary.
 const sendFireNotifications = async (firesData) => {
-  console.log('🔥 Sending fire alert email notifications...');
+  console.log('🔥 Evaluating fire alert email notifications (concession-only)...');
 
   const results = {
     email: null,
@@ -334,25 +305,25 @@ const sendFireNotifications = async (firesData) => {
     fireCount: firesData.length
   };
 
-  // Send email for fires in monitored regions (Botswana/KPR or USA)
-  const monitoredFires = firesData.filter(fire => {
-    const details = formatFireDetails(fire);
-    return details.region === 'Botswana (KPR Concession Area)' || details.region === 'United States';
+  const monitoredFires = (firesData || []).filter((fire) => {
+    const { lat, lon } = fireCoords(fire);
+    return !Number.isNaN(lat) && !Number.isNaN(lon) && pointInConcession(lat, lon);
   });
 
   if (monitoredFires.length > 0) {
-    console.log(`🚨 ${monitoredFires.length} fires detected in monitored region - sending alerts!`);
+    console.log(`🚨 ${monitoredFires.length} fire(s) inside concession — sending alerts`);
 
     try {
       const first = monitoredFires[0];
+      const { lat, lon } = fireCoords(first);
       const details = formatFireDetails(first);
       const consolidatedFireData = {
         properties: {
           ...first.properties,
           fireCount: monitoredFires.length,
-          message: `${monitoredFires.length} fires detected in ${details.region}`,
-          latitude: first.geometry.coordinates[1],
-          longitude: first.geometry.coordinates[0]
+          message: `${monitoredFires.length} fire(s) detected inside KPR concession`,
+          latitude: lat,
+          longitude: lon
         }
       };
 
@@ -362,8 +333,8 @@ const sendFireNotifications = async (firesData) => {
       results.email = { success: false, error: error.message };
     }
   } else {
-    console.log('✅ No fires detected in monitored regions');
-    results.email = { success: true, reason: 'No fires in monitored regions' };
+    console.log('✅ No fires inside concession boundary — no email alerts');
+    results.email = { success: true, reason: 'No fires inside concession' };
   }
 
   console.log('Fire notification results:', JSON.stringify(results, null, 2));
