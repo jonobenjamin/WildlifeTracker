@@ -25,7 +25,19 @@ production on that repo.
 
 ## 2. Vercel project settings
 
-1. [vercel.com/new](https://vercel.com/new) → import (or re-point the existing) `WildlifeTracker` project.
+**Use only project `khwai-private-reserve`** (custom domain `khwaiprivate.okavangowater.com`).
+
+Do **not** use the old Express project (`wildlife-tracker-gxz5` or similar). That project looks for
+`server.js` / `index.js` and fails with:
+
+> No entrypoint found. Searched for: app.js, index.js, server.js…
+
+If that old project is still connected to the `WildlifeTracker` GitHub repo, every push will show a
+failed build there even while `khwai-private-reserve` deploys fine. In Vercel → that old project →
+**Settings → Git → Disconnect**, or delete/archive the project. Put all env vars (including Resend)
+on **`khwai-private-reserve` only**.
+
+1. [vercel.com/new](https://vercel.com/new) → import (or re-point) `WildlifeTracker` as **Next.js**.
 2. Framework preset: **Next.js** (auto-detected). Root directory: `.` (repo root — `app/`,
    `server/`, `pages/api/` etc. are all at the top level of this repo).
 3. Add all environment variables from `.env.example` under **Settings → Environment Variables**
