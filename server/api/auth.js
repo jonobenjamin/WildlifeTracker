@@ -171,7 +171,7 @@ router.post('/request-pin', async (req, res) => {
       attempts: 0
     });
 
-    // Send PIN via email using EmailJS (reuse existing notification service)
+    // Send PIN via Resend
     try {
       const emailSubject = 'Your Wildlife Tracker PIN Code';
 
@@ -516,59 +516,38 @@ router.post('/change-password', async (req, res) => {
   }
 });
 
-// Helper function to send PIN emails (adapted from existing email service)
-// Note: Uses EMAILJS_PIN_TEMPLATE_ID for PIN auth, EMAILJS_TEMPLATE_ID is for poaching notifications
+// PIN / auth emails via Resend
 async function sendPinEmail(toEmail, subject, body, isHtml = false) {
-  // Extract PIN from HTML body for template variable
-  const pinMatch = body.match(/pin-code[^>]*>(\d{6})</);
-  const pinCode = pinMatch ? pinMatch[1] : 'ERROR';
+  const { sendResendEmail, escapeHtml, isConfigured } = require('../services/resendEmail');
 
-  const emailData = {
-    service_id: process.env.EMAILJS_SERVICE_ID,
-    template_id: process.env.EMAILJS_PIN_TEMPLATE_ID || process.env.EMAILJS_TEMPLATE_ID, // PIN template for auth, fallback to general
-    user_id: process.env.EMAILJS_PUBLIC_KEY,
-    accessToken: process.env.EMAILJS_PRIVATE_KEY, // Required for EmailJS API
-    template_params: {
-      email: toEmail,     // Template expects {{email}} in To Email field
-      pin: pinCode,      // ✅ Add PIN variable for template
-      reply_to: toEmail,  // Add reply_to to match template
-      subject: subject,
-      message: body,
-      from_name: process.env.EMAIL_FROM_NAME || 'Wildlife Tracker',
-      html_content: isHtml ? body : undefined
-    }
-  };
-
-  console.log('EmailJS request data:', {
-    service_id: emailData.service_id,
-    template_id: emailData.template_id,
-    user_id: emailData.user_id ? '***' : 'MISSING',
-    accessToken: emailData.accessToken ? '***' : 'MISSING',
-    to_email: emailData.to_email, // Check if this field exists
-    template_params: {
-      ...emailData.template_params,
-      message: emailData.template_params.message?.substring(0, 50) + '...'
-    }
-  });
-
-  // Use EmailJS to send the email
-  const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(emailData)
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('EmailJS error response:', errorText);
-    throw new Error(`EmailJS error: ${response.status} - ${errorText}`);
+  if (!isConfigured()) {
+    throw new Error('Resend not configured (set RESEND_API_KEY and RESEND_FROM_EMAIL)');
   }
 
-  // EmailJS returns "OK" as plain text on success
-  const result = await response.text();
-  console.log('EmailJS success:', result);
+  const pinMatch = body.match(/pin-code[^>]*>(\d{6})</) || body.match(/\b(\d{6})\b/);
+  const pinCode = pinMatch ? pinMatch[1] : null;
+
+  const html = isHtml
+    ? body
+    : `<!DOCTYPE html><html><body style="font-family:Segoe UI,Tahoma,sans-serif;background:#f4f1ea;padding:24px;">
+      <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:28px;">
+        <h2 style="margin:0 0 12px;color:#43512d;">${escapeHtml(subject)}</h2>
+        <p style="color:#333;white-space:pre-wrap;">${escapeHtml(body)}</p>
+        ${pinCode ? `<p style="font-size:28px;letter-spacing:6px;font-weight:700;color:#526b38;margin:20px 0;">${escapeHtml(pinCode)}</p>` : ''}
+        <p style="font-size:13px;color:#666;margin:0;">KPR Wildlife Tracker</p>
+      </div></body></html>`;
+
+  const result = await sendResendEmail({
+    to: toEmail,
+    subject,
+    html,
+    text: pinCode ? `${subject}\n\nYour PIN: ${pinCode}` : body,
+  });
+
+  if (!result.success) {
+    throw new Error(result.reason || result.message || 'Failed to send PIN email');
+  }
+  console.log('Resend PIN email success:', result.message);
 }
 
 module.exports = router;

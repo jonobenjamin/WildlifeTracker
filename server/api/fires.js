@@ -73,7 +73,7 @@ module.exports = (db) => {
   // GET /api/fires — map display only; results clipped to concession boundary polygon.
   router.get('/', async (req, res) => {
     try {
-      const days = Math.min(Math.max(parseInt(req.query.days, 10) || 3, 1), 7);
+      const days = Math.min(Math.max(parseInt(req.query.days, 10) || 3, 1), 3);
       const bbox = (req.query.bbox || getConcessionFirmsBbox()).trim();
       const mapKey = (process.env.FIRMS_MAP_KEY || '').trim().replace(/^["']|["']$/g, '');
 

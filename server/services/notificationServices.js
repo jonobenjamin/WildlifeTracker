@@ -1,29 +1,10 @@
-const emailjs = require('@emailjs/nodejs');
 const { pointInConcession, fireCoords } = require('./concessionBoundary');
+const { sendResendEmail, buildAlertHtml, isConfigured } = require('./resendEmail');
+const { getRecipientEmailsForEvent, envFallbackEmails } = require('./notificationRules');
 
-// Initialize EmailJS
-const initializeEmailJS = () => {
-  if (!process.env.EMAILJS_SERVICE_ID || !process.env.EMAILJS_TEMPLATE_ID || !process.env.EMAILJS_PUBLIC_KEY || !process.env.EMAILJS_PRIVATE_KEY) {
-    console.warn('EmailJS credentials not configured. Email notifications disabled.');
-    return false;
-  }
+const generateGoogleMapsLink = (latitude, longitude) =>
+  `https://www.google.com/maps?q=${latitude},${longitude}`;
 
-  // Initialize EmailJS with both public and private keys
-  emailjs.init({
-    publicKey: process.env.EMAILJS_PUBLIC_KEY,
-    privateKey: process.env.EMAILJS_PRIVATE_KEY,
-  });
-
-  return true;
-};
-
-
-// Generate Google Maps link from coordinates
-const generateGoogleMapsLink = (latitude, longitude) => {
-  return `https://www.google.com/maps?q=${latitude},${longitude}`;
-};
-
-// Format incident details for notification
 const formatIncidentDetails = (incidentData) => {
   const {
     id,
@@ -36,17 +17,21 @@ const formatIncidentDetails = (incidentData) => {
     user,
     animal,
     notes,
-    image_url
+    image_path,
+    image_url,
   } = incidentData;
 
-  const mapsLink = generateGoogleMapsLink(latitude, longitude);
+  const mapsLink =
+    latitude != null && longitude != null
+      ? generateGoogleMapsLink(latitude, longitude)
+      : null;
   const formattedDate = new Date(timestamp).toLocaleString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    timeZoneName: 'short'
+    timeZoneName: 'short',
   });
 
   return {
@@ -61,16 +46,21 @@ const formatIncidentDetails = (incidentData) => {
     user: user || 'Unknown',
     animal: animal || 'N/A',
     notes: notes || 'No additional notes',
-    coordinates: `${latitude}, ${longitude}`,
-    has_image: !!image_url // Just indicate if image exists, don't provide URL
+    coordinates:
+      latitude != null && longitude != null ? `${latitude}, ${longitude}` : 'N/A',
+    has_image: !!(image_path || image_url),
   };
 };
 
-// Format fire details for notification
 const formatFireDetails = (fireData) => {
   const props = fireData.properties || fireData;
   const { lat: resolvedLat, lon: resolvedLon } = fireCoords(
-    fireData.geometry ? fireData : { geometry: { coordinates: [props.longitude, props.latitude] }, properties: props }
+    fireData.geometry
+      ? fireData
+      : {
+          geometry: { coordinates: [props.longitude, props.latitude] },
+          properties: props,
+        }
   );
   const latitude = resolvedLat;
   const longitude = resolvedLon;
@@ -78,18 +68,19 @@ const formatFireDetails = (fireData) => {
 
   const mapsLink = generateGoogleMapsLink(latitude, longitude);
 
-  // Format acquisition time (HHMM to HH:MM)
   let formattedTime = 'Unknown';
   if (acq_time) {
     const timeStr = acq_time.toString().padStart(4, '0');
     formattedTime = `${timeStr.slice(0, 2)}:${timeStr.slice(2, 4)}`;
   }
 
-  const formattedDate = acq_date ? new Date(acq_date).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  }) : 'Unknown';
+  const formattedDate = acq_date
+    ? new Date(acq_date).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : 'Unknown';
 
   return {
     latitude,
@@ -102,11 +93,12 @@ const formatFireDetails = (fireData) => {
     sensor: sensor || 'Unknown',
     acq_date: formattedDate,
     acq_time: formattedTime,
-    region: getFireRegion(latitude, longitude)
+    region: getFireRegion(latitude, longitude),
+    fireCount: props.fireCount,
+    message: props.message,
   };
 };
 
-// Determine which region a fire is in — alerts only for the concession polygon.
 const getFireRegion = (latitude, longitude) => {
   if (pointInConcession(Number(latitude), Number(longitude))) {
     return 'Khwai Private Reserve (concession)';
@@ -114,195 +106,182 @@ const getFireRegion = (latitude, longitude) => {
   return 'Outside concession';
 };
 
-// Send email notification using EmailJS
-const sendEmailNotification = async (incidentData) => {
-  if (!initializeEmailJS()) {
-    console.log('EmailJS not configured, skipping email notification');
-    return { success: false, reason: 'EmailJS not configured' };
-  }
-
-  const recipients = process.env.NOTIFICATION_EMAILS ?
-    process.env.NOTIFICATION_EMAILS.split(',').map(email => email.trim()) : [];
-
+async function resolveRecipients(category, item) {
+  let recipients = await getRecipientEmailsForEvent({ category, item });
   if (recipients.length === 0) {
+    // Legacy fallback only when no admin rules matched
+    recipients = envFallbackEmails();
+  }
+  return recipients;
+}
+
+async function sendHtmlToRecipients(recipients, subject, html) {
+  if (!isConfigured()) {
+    console.log('Resend not configured, skipping email notification');
+    return { success: false, reason: 'Resend not configured' };
+  }
+  if (!recipients.length) {
     console.warn('No notification email recipients configured');
     return { success: false, reason: 'No recipients configured' };
   }
+  return sendResendEmail({ to: recipients, subject, html });
+}
 
+const sendPoachingIncidentEmail = async (incidentData) => {
+  const recipients = await resolveRecipients('incident', incidentData.incident_type || 'Poaching');
   const details = formatIncidentDetails(incidentData);
-
-  // Prepare template parameters for EmailJS (poaching - dynamic alert text)
-  const templateParams = {
-    incident_id: details.id,
-    incident_type: details.incident_type,
-    poaching_type: details.poaching_type,
-    timestamp: details.timestamp,
-    reporter: details.user,
-    animal: details.animal || 'N/A',
-    coordinates: details.coordinates,
-    notes: details.notes,
-    maps_link: details.mapsLink,
-    maps_link_text: details.mapsLink,
-    image_status: details.has_image ? 'Image attached (access via app)' : 'No image attached',
-    from_name: process.env.EMAIL_FROM_NAME || 'Wildlife Tracker Alert',
-    alert_subject: '🚨 POACHING INCIDENT ALERT',
-    alert_heading: 'POACHING INCIDENT ALERT',
-    alert_subtitle: 'Immediate Action Required',
-    alert_intro: 'URGENT: A poaching incident has been reported and requires immediate attention from wildlife protection teams.',
-    footer_message: 'Please respond immediately to protect wildlife'
-  };
-
-  try {
-    // Send to each recipient individually (EmailJS template approach)
-    const results = [];
-
-    for (const recipient of recipients) {
-      try {
-        const result = await emailjs.send(
-          process.env.EMAILJS_SERVICE_ID,
-          process.env.EMAILJS_TEMPLATE_ID,
-          {
-            ...templateParams,
-            to_email: recipient
-          }
-        );
-        results.push({ success: true, recipient, messageId: result.text });
-        console.log(`Email sent to ${recipient}:`, result.text);
-      } catch (error) {
-        console.error(`Failed to send email to ${recipient}:`, error);
-        results.push({ success: false, recipient, error: error.message });
-      }
-    }
-
-    const successCount = results.filter(r => r.success).length;
-    return {
-      success: successCount > 0,
-      results,
-      message: `Sent to ${successCount}/${recipients.length} recipients`
-    };
-  } catch (error) {
-    console.error('Error sending email notification:', error);
-    return { success: false, error: error.message };
-  }
+  const subject = 'POACHING INCIDENT ALERT — KPR';
+  const html = buildAlertHtml({
+    heading: 'POACHING INCIDENT ALERT',
+    subtitle: 'Immediate Action Required',
+    intro:
+      'URGENT: A poaching incident has been reported and requires immediate attention from wildlife protection teams.',
+    accent: '#b42318',
+    mapsLink: details.mapsLink,
+    footer: 'Please respond immediately to protect wildlife. — KPR Wildlife Tracker',
+    rows: [
+      ['Incident ID', details.id],
+      ['Type', details.incident_type],
+      ['Poaching type', details.poaching_type],
+      ['Animal', details.animal],
+      ['Reporter', details.user],
+      ['When', details.timestamp],
+      ['Coordinates', details.coordinates],
+      ['Notes', details.notes],
+      ['Image', details.has_image ? 'Attached (view in app)' : 'None'],
+    ],
+  });
+  return sendHtmlToRecipients(recipients, subject, html);
 };
 
+const sendObservationNotification = async (observation) => {
+  const categoryRaw = (observation.category || '').toLowerCase();
+  let category;
+  let item;
+  let subject;
+  let heading;
+  let intro;
+  let accent = '#526b38';
+  const details = formatIncidentDetails(observation);
 
-// Main function to send notifications for a poaching incident
+  if (categoryRaw === 'sighting') {
+    category = 'sighting';
+    item = observation.animal;
+    subject = `Sighting alert: ${item || 'Animal'} — KPR`;
+    heading = 'SIGHTING ALERT';
+    intro = `A new ${item || 'animal'} sighting was submitted.`;
+  } else if (categoryRaw === 'incident') {
+    category = 'incident';
+    item = observation.incident_type;
+    const isPoach = isPoachingIncident(observation);
+    subject = isPoach
+      ? 'POACHING INCIDENT ALERT — KPR'
+      : `Incident alert: ${item || 'Incident'} — KPR`;
+    heading = isPoach ? 'POACHING INCIDENT ALERT' : 'INCIDENT ALERT';
+    intro = isPoach
+      ? 'URGENT: A poaching incident has been reported.'
+      : `A new ${item || 'incident'} was reported.`;
+    accent = '#b42318';
+  } else if (categoryRaw === 'maintenance') {
+    category = 'maintenance';
+    item = observation.maintenance_type;
+    subject = `Maintenance alert: ${item || 'Issue'} — KPR`;
+    heading = 'MAINTENANCE ALERT';
+    intro = `A maintenance report was submitted: ${item || 'issue'}.`;
+    accent = '#c9a96b';
+  } else {
+    return { success: false, reason: 'Unsupported category' };
+  }
+
+  const recipients = await resolveRecipients(category, item);
+  if (recipients.length === 0) {
+    console.log(`No notification rules matched for ${category}/${item}`);
+    return { success: true, reason: 'No matching notification rules' };
+  }
+
+  const rows = [
+    ['Category', observation.category],
+    ['Type / species', item || 'N/A'],
+  ];
+  if (observation.poaching_type) rows.push(['Poaching type', observation.poaching_type]);
+  if (observation.poached_animal) rows.push(['Poached animal', observation.poached_animal]);
+  if (observation.animal && category !== 'sighting') rows.push(['Animal', observation.animal]);
+  rows.push(
+    ['Reporter', details.user],
+    ['When', details.timestamp],
+    ['Coordinates', details.coordinates],
+    ['Notes', details.notes],
+    ['Image', details.has_image ? 'Attached (view in app)' : 'None']
+  );
+
+  const html = buildAlertHtml({
+    heading,
+    subtitle: 'Khwai Private Reserve',
+    intro,
+    accent,
+    mapsLink: details.mapsLink,
+    footer: 'KPR Wildlife Tracker',
+    rows,
+  });
+
+  return sendHtmlToRecipients(recipients, subject, html);
+};
+
 const sendPoachingIncidentNotifications = async (incidentData) => {
-  console.log('🚨 Sending poaching incident email notifications...');
-
-  const results = {
-    email: null,
-    timestamp: new Date().toISOString()
-  };
-
-  // Send email notification
+  console.log('Sending poaching incident email notifications via Resend...');
+  const results = { email: null, timestamp: new Date().toISOString() };
   try {
-    results.email = await sendEmailNotification(incidentData);
+    results.email = await sendPoachingIncidentEmail(incidentData);
   } catch (error) {
     console.error('Email notification failed:', error);
     results.email = { success: false, error: error.message };
   }
-
-  console.log('Notification results:', JSON.stringify(results, null, 2));
   return results;
 };
 
-// Check if incident is a poaching incident
 const isPoachingIncident = (incidentData) => {
   const { category, incident_type } = incidentData;
-  
-  if (category !== 'Incident') {
-    return false;
-  }
-
-  // Check if incident_type contains "poach" (case-insensitive)
+  if (category !== 'Incident') return false;
   const poachingKeywords = ['poach', 'illegal hunting', 'snare', 'trap'];
   const incidentTypeLower = (incident_type || '').toLowerCase();
-  
-  return poachingKeywords.some(keyword => incidentTypeLower.includes(keyword));
+  return poachingKeywords.some((keyword) => incidentTypeLower.includes(keyword));
 };
 
-// Send email notification for fire alerts
 const sendFireAlertNotification = async (fireData) => {
-  if (!initializeEmailJS()) {
-    console.log('EmailJS not configured, skipping fire alert email');
-    return { success: false, reason: 'EmailJS not configured' };
-  }
-
-  const recipients = process.env.NOTIFICATION_EMAILS ?
-    process.env.NOTIFICATION_EMAILS.split(',').map(email => email.trim()) : [];
-
-  if (recipients.length === 0) {
-    console.warn('No notification email recipients configured');
-    return { success: false, reason: 'No recipients configured' };
-  }
-
+  const recipients = await resolveRecipients('fire', 'Any fire in concession');
   const details = formatFireDetails(fireData);
-
-  // Prepare template parameters for EmailJS (fire - dynamic alert text)
-  const templateParams = {
-    incident_id: `FIRE-${Date.now()}`, // Generate unique ID for fire
-    incident_type: 'Fire Detected',
-    poaching_type: 'N/A',
-    timestamp: `${details.acq_date} ${details.acq_time}`,
-    reporter: 'NASA FIRMS Satellite',
-    animal: 'N/A',
-    coordinates: details.coordinates,
-    notes: `🚨 FIRE ALERT: ${details.sensor} satellite detected fire in ${details.region}. Confidence: ${details.confidence}%, Brightness: ${details.brightness}K, FRP: ${details.frp} MW`,
-    maps_link: details.mapsLink,
-    maps_link_text: details.mapsLink,
-    image_status: 'Satellite thermal detection - check map for location',
-    from_name: process.env.EMAIL_FROM_NAME || 'KPR Fire Alert System',
-    alert_subject: '🔥 FIRE ALERT',
-    alert_heading: 'FIRE ALERT',
-    alert_subtitle: 'Satellite Detection - Immediate Action Required',
-    alert_intro: 'URGENT: Satellite thermal detection has identified a fire requiring immediate attention.',
-    footer_message: 'Please respond immediately to assess and respond to the fire'
-  };
-
-  try {
-    // Send to each recipient individually
-    const results = [];
-
-    for (const recipient of recipients) {
-      try {
-        const result = await emailjs.send(
-          process.env.EMAILJS_SERVICE_ID,
-          process.env.EMAILJS_TEMPLATE_ID, // Reuse poaching template
-          {
-            ...templateParams,
-            to_email: recipient
-          }
-        );
-        results.push({ success: true, recipient, messageId: result.text });
-        console.log(`Fire alert email sent to ${recipient}:`, result.text);
-      } catch (error) {
-        console.error(`Failed to send fire alert email to ${recipient}:`, error);
-        results.push({ success: false, recipient, error: error.message });
-      }
-    }
-
-    const successCount = results.filter(r => r.success).length;
-    return {
-      success: successCount > 0,
-      results,
-      message: `Fire alerts sent to ${successCount}/${recipients.length} recipients`
-    };
-  } catch (error) {
-    console.error('Error sending fire alert email:', error);
-    return { success: false, error: error.message };
-  }
+  const count = details.fireCount || 1;
+  const subject = count > 1 ? `FIRE ALERT — ${count} detections — KPR` : 'FIRE ALERT — KPR';
+  const html = buildAlertHtml({
+    heading: 'FIRE ALERT',
+    subtitle: 'Satellite Detection — Immediate Action Required',
+    intro:
+      details.message ||
+      'URGENT: Satellite thermal detection has identified a fire requiring immediate attention.',
+    accent: '#c2410c',
+    mapsLink: details.mapsLink,
+    footer: 'Please assess and respond. — KPR Fire Alert System',
+    rows: [
+      ['Region', details.region],
+      ['Sensor', details.sensor],
+      ['Date', `${details.acq_date} ${details.acq_time}`],
+      ['Coordinates', details.coordinates],
+      ['Confidence', `${details.confidence}%`],
+      ['Brightness', `${details.brightness} K`],
+      ['FRP', `${details.frp} MW`],
+      ['Detections', String(count)],
+    ],
+  });
+  return sendHtmlToRecipients(recipients, subject, html);
 };
 
-// Main function to send notifications — ONLY for fires inside the concession boundary.
 const sendFireNotifications = async (firesData) => {
-  console.log('🔥 Evaluating fire alert email notifications (concession-only)...');
+  console.log('Evaluating fire alert emails (concession-only, Resend)...');
 
   const results = {
     email: null,
     timestamp: new Date().toISOString(),
-    fireCount: firesData.length
+    fireCount: firesData.length,
   };
 
   const monitoredFires = (firesData || []).filter((fire) => {
@@ -311,41 +290,38 @@ const sendFireNotifications = async (firesData) => {
   });
 
   if (monitoredFires.length > 0) {
-    console.log(`🚨 ${monitoredFires.length} fire(s) inside concession — sending alerts`);
-
+    console.log(`${monitoredFires.length} fire(s) inside concession — sending alerts`);
     try {
       const first = monitoredFires[0];
       const { lat, lon } = fireCoords(first);
-      const details = formatFireDetails(first);
       const consolidatedFireData = {
         properties: {
           ...first.properties,
           fireCount: monitoredFires.length,
           message: `${monitoredFires.length} fire(s) detected inside KPR concession`,
           latitude: lat,
-          longitude: lon
-        }
+          longitude: lon,
+        },
       };
-
       results.email = await sendFireAlertNotification(consolidatedFireData);
     } catch (error) {
       console.error('Fire alert notification failed:', error);
       results.email = { success: false, error: error.message };
     }
   } else {
-    console.log('✅ No fires inside concession boundary — no email alerts');
+    console.log('No fires inside concession boundary — no email alerts');
     results.email = { success: true, reason: 'No fires inside concession' };
   }
 
-  console.log('Fire notification results:', JSON.stringify(results, null, 2));
   return results;
 };
 
 module.exports = {
   sendPoachingIncidentNotifications,
+  sendObservationNotification,
   isPoachingIncident,
   sendFireNotifications,
   generateGoogleMapsLink,
   formatIncidentDetails,
-  formatFireDetails
+  formatFireDetails,
 };

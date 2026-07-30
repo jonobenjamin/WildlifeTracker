@@ -294,8 +294,6 @@ export default function MapFilterPanel({
             <select className="kpr-input" value={fireDays} onChange={(e) => onFireDaysChange(e.target.value)}>
               <option value="1">1 Day</option>
               <option value="3">3 Days</option>
-              <option value="7">7 Days</option>
-              <option value="10">10 Days</option>
             </select>
           </div>
           <div className="kpr-card bg-portal-surface-muted p-4 text-center">

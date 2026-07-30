@@ -6,6 +6,7 @@ import AppShell from '@/components/AppShell';
 import { useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
 import { listUsers, createUser, updateUser, setUserStatus, deleteUser } from '@/lib/actions/adminUsers';
+import ConfigureNotifications from '@/components/ConfigureNotifications';
 import dayjs from 'dayjs';
 
 const ROLES = ['admin', 'user', 'viewer'];
@@ -128,7 +129,7 @@ export default function AdminPage() {
   if (!authorized) return null;
 
   return (
-    <AppShell title="Submissions & Users">
+    <AppShell title="Admin">
       <div className="space-y-6">
         <div className="grid grid-cols-3 gap-3">
           {[
@@ -144,6 +145,8 @@ export default function AdminPage() {
             </div>
           ))}
         </div>
+
+        <ConfigureNotifications users={users} />
 
         <section className="kpr-card p-6">
           <div className="flex flex-wrap items-center justify-between gap-4 mb-4">

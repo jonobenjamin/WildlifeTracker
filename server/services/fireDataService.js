@@ -5,7 +5,7 @@
 const { getConcessionFirmsBbox, filterFiresInConcession } = require('./concessionBoundary');
 
 async function fetchFireData(days = 3) {
-  const daysParam = Math.min(parseInt(days, 10) || 3, 7);
+  const daysParam = Math.min(parseInt(days, 10) || 3, 3);
   const bbox = getConcessionFirmsBbox();
   const BASE_URL = 'https://firms.modaps.eosdis.nasa.gov/api/area/csv';
   const mapKey = (process.env.FIRMS_MAP_KEY || '').trim().replace(/^["']|["']$/g, '');

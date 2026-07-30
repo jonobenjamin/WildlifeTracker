@@ -35,11 +35,24 @@ production on that repo.
    - `API_KEY` + `NEXT_PUBLIC_API_KEY` (same value — must match what the Flutter PWA sends)
    - `ADMIN_API_KEY`
    - `NEXT_PUBLIC_FIREBASE_*` (public Firebase Web SDK config)
-   - `EMAILJS_*` if you want PIN/fire-alert emails to keep working
+   - `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `EMAIL_FROM_NAME` for PIN login + alert emails
+     (create a **new** Resend API key / verified domain for this project; then configure who
+     gets alerts under Admin → Configure Notifications)
    - `FIRMS_MAP_KEY`, `CRON_SECRET` if you want the daily fire-check cron
    - `OKAVANGO_API_BASE=https://okavangowater.com`, `OKAVANGO_PARTNER_SLUG`, `OKAVANGO_API_KEY`
      (server-side only — used by `/api/okavango-water/*` to proxy historical water-extent PNGs;
      the partner key never reaches the browser)
+
+### Resend setup (new project for KPR)
+
+1. In [resend.com](https://resend.com) create an API key for this app (do not reuse another project's key unless you intend to).
+2. Add and verify a sending domain (or use Resend's onboarding domain for tests only).
+3. In Vercel → Environment Variables set:
+   - `RESEND_API_KEY=re_...`
+   - `RESEND_FROM_EMAIL=alerts@your-verified-domain.com`
+   - `EMAIL_FROM_NAME=KPR Wildlife Tracker`
+4. Redeploy, then on the live site go to **Admin → Configure Notifications** and add rules
+   (submission type → sub-items → users with email addresses).
 4. Deploy. Vercel only builds the Next.js app — it ignores `docs/` (it's not referenced by
    `next.config.mjs` or `public/`), so having it in the repo doesn't affect the Vercel build.
 

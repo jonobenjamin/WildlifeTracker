@@ -53,7 +53,7 @@ See `.env.example`. Three groups:
 2. **`FIREBASE_SERVICE_ACCOUNT_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_DATABASE_ID`** — server-side Firebase Admin, used by every `/api/*` route.
 3. **`API_KEY` / `NEXT_PUBLIC_API_KEY`** — the shared key the Flutter PWA already sends as `x-api-key` on `/api/observations`, `/api/trees`, `/api/tracking`, `/api/map`, `/api/water-monitoring`. Same value on both sides.
 4. **`ADMIN_API_KEY`** — protects `/api/admin/*` (user management). Kept server-only; the dashboard calls it through Next.js Server Actions (`lib/actions/adminUsers.js`) so this key never reaches the browser.
-5. **`EMAILJS_*`, `FIRMS_MAP_KEY`, `CRON_SECRET`** — fire-alert emails, PIN emails, NASA FIRMS fire data, and the daily Vercel Cron fire check.
+5. **`RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `EMAIL_FROM_NAME`, `FIRMS_MAP_KEY`, `CRON_SECRET`** — Resend for PIN + alert emails (configure recipients under Admin → Configure Notifications), NASA FIRMS fire data, and the daily Vercel Cron fire check.
 
 ## Deploying
 
