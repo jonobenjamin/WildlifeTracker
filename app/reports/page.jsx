@@ -37,9 +37,9 @@ export default function ReportsPage() {
   }, [authorized]);
 
   const stats = useMemo(() => {
-    const sightings = observations.filter((o) => o.category === 'sighting');
-    const incidents = observations.filter((o) => o.category === 'incident');
-    const maintenance = observations.filter((o) => o.category === 'maintenance');
+    const sightings = observations.filter((o) => (o.category || '').toLowerCase() === 'sighting');
+    const incidents = observations.filter((o) => (o.category || '').toLowerCase() === 'incident');
+    const maintenance = observations.filter((o) => (o.category || '').toLowerCase() === 'maintenance');
     const totalKm = tracking.reduce((sum, t) => sum + (t.distanceMeters || 0), 0) / 1000;
     return { sightings, incidents, maintenance, totalKm };
   }, [observations, tracking]);

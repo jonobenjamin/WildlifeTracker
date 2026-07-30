@@ -36,7 +36,7 @@ export default function WildlifeMapPage() {
         },
       }).addTo(map);
 
-      const sightings = (obsRes.data || []).filter((o) => o.category === 'sighting' && o.latitude != null && o.longitude != null);
+      const sightings = (obsRes.data || []).filter((o) => (o.category || '').toLowerCase() === 'sighting' && o.latitude != null && o.longitude != null);
       setCount(sightings.length);
       sightings.forEach((o) => {
         const marker = L.marker([o.latitude, o.longitude], { icon: divIcon(L, 'sighting') });

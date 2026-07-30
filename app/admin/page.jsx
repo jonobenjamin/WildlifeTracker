@@ -43,7 +43,8 @@ export default function AdminPage() {
   const submissionCounts = useMemo(() => {
     const byCategory = { sighting: 0, incident: 0, maintenance: 0 };
     observations.forEach((o) => {
-      if (byCategory[o.category] !== undefined) byCategory[o.category] += 1;
+      const cat = (o.category || '').toLowerCase();
+      if (byCategory[cat] !== undefined) byCategory[cat] += 1;
     });
     return byCategory;
   }, [observations]);

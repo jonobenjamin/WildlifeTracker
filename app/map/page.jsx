@@ -111,7 +111,7 @@ export default function ConcessionMapPage() {
 
       ['sighting', 'incident', 'maintenance'].forEach((category) => {
         const markers = (obsRes.data || [])
-          .filter((o) => o.category === category && o.latitude != null && o.longitude != null)
+          .filter((o) => (o.category || '').toLowerCase() === category && o.latitude != null && o.longitude != null)
           .map((o) => {
             const marker = L.marker([o.latitude, o.longitude], { icon: divIcon(L, category) });
             marker.bindPopup(popupHtml(o));

@@ -41,9 +41,9 @@ export default function ProfilePage() {
   }, [observations, user]);
 
   const stats = useMemo(() => {
-    const sightings = mine.filter((o) => o.category === 'sighting').length;
-    const maintenance = mine.filter((o) => o.category === 'maintenance').length;
-    const incidents = mine.filter((o) => o.category === 'incident').length;
+    const sightings = mine.filter((o) => (o.category || '').toLowerCase() === 'sighting').length;
+    const maintenance = mine.filter((o) => (o.category || '').toLowerCase() === 'maintenance').length;
+    const incidents = mine.filter((o) => (o.category || '').toLowerCase() === 'incident').length;
     return { sightings, maintenance, incidents, total: mine.length };
   }, [mine]);
 
