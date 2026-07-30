@@ -48,12 +48,16 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [usersRes, obsRes] = await Promise.all([listUsers(), apiFetch('/api/observations').catch(() => ({ data: [] }))]);
+      const [usersRes, obsRes] = await Promise.all([
+        listUsers(),
+        apiFetch('/api/observations').catch(() => ({ data: [] })),
+      ]);
       setUsers(usersRes.users || []);
       setStats(usersRes.stats || { total: 0, active: 0, revoked: 0 });
       setObservations(obsRes.data || []);
     } catch (e) {
-      setError(e.message);
+      console.error('Admin refresh failed:', e);
+      setError(e?.message || 'Failed to load users. Check Vercel logs for details.');
     } finally {
       setLoading(false);
     }
