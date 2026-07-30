@@ -8,6 +8,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const admin = require('firebase-admin');
+const { getDb } = require('./firestoreDb');
 
 let db;
 
@@ -43,18 +44,13 @@ function initializeFirebase() {
       throw new Error('Firebase service account key not configured');
     }
   }
-  return admin.firestore();
+  return getDb();
 }
 
 try {
   initializeFirebase();
-  db = admin.firestore();
-  try {
-    db.settings({ databaseId: process.env.FIREBASE_DATABASE_ID || 'wildlifetracker-db' });
-  } catch (settingsError) {
-    // already configured — fine
-  }
-  console.log('Firebase initialized successfully');
+  db = getDb();
+  console.log('Firebase initialized successfully (database: %s)', process.env.FIREBASE_DATABASE_ID || 'wildlifetracker-db');
 } catch (error) {
   console.error('Failed to initialize Firebase:', error.message);
   db = null;

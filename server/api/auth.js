@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
+const { getDb } = require('../firestoreDb');
 
 const router = express.Router();
 
@@ -42,7 +43,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const db = admin.firestore();
+    const db = getDb();
     const usersSnap = await db.collection('users').get();
 
     const nameLower = name.trim().toLowerCase();
@@ -430,7 +431,7 @@ router.post('/verify-pin', async (req, res) => {
     const customToken = await admin.auth().createCustomToken(uid, additionalClaims);
     console.log('Custom token created successfully');
 
-    const db = admin.firestore();
+    const db = getDb();
     await db.collection('users').doc(uid).set(
       { lastLogin: admin.firestore.FieldValue.serverTimestamp() },
       { merge: true }
@@ -488,7 +489,7 @@ router.post('/change-password', async (req, res) => {
     const decoded = await admin.auth().verifyIdToken(token);
     const uid = decoded.uid;
 
-    const db = admin.firestore();
+    const db = getDb();
     const userRef = db.collection('users').doc(uid);
     const snap = await userRef.get();
     if (!snap.exists) {

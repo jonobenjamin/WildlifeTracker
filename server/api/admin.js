@@ -1,6 +1,7 @@
 const express = require('express');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
+const { getDb } = require('../firestoreDb');
 
 const router = express.Router();
 
@@ -44,8 +45,8 @@ const requireAdmin = (req, res, next) => {
 // Get all users
 router.get('/users', requireAdmin, async (req, res) => {
   try {
-    const db = admin.firestore();
-    console.log('📊 Admin API - Database being used:', db._settings?.databaseId || 'default');
+    const db = getDb();
+    console.log('📊 Admin API - Database being used:', process.env.FIREBASE_DATABASE_ID || 'wildlifetracker-db');
 
     // Get all users from the users collection
     let usersSnapshot;
@@ -128,7 +129,7 @@ router.post('/users', requireAdmin, async (req, res) => {
     const validRoles = ['admin', 'user', 'viewer'];
     const userRole = validRoles.includes(role) ? role : 'user';
 
-    const db = admin.firestore();
+    const db = getDb();
     const isEmail = identifier.includes('@');
     const key = isEmail
       ? identifier.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_')
@@ -193,7 +194,7 @@ router.patch('/users/:userId', requireAdmin, async (req, res) => {
     const { userId } = req.params;
     const { name, role, password } = req.body;
 
-    const db = admin.firestore();
+    const db = getDb();
     const userRef = db.collection('users').doc(userId);
 
     const userDoc = await userRef.get();
@@ -260,7 +261,7 @@ router.patch('/users/:userId/status', requireAdmin, async (req, res) => {
       });
     }
 
-    const db = admin.firestore();
+    const db = getDb();
     const userRef = db.collection('users').doc(userId);
 
     // Check if user exists
@@ -300,7 +301,7 @@ router.delete('/users/:userId', requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const db = admin.firestore();
+    const db = getDb();
     const userRef = db.collection('users').doc(userId);
 
     // Check if user exists
@@ -338,7 +339,7 @@ router.get('/users/:userId', requireAdmin, async (req, res) => {
   try {
     const { userId } = req.params;
 
-    const db = admin.firestore();
+    const db = getDb();
     const userDoc = await db.collection('users').doc(userId).get();
 
     if (!userDoc.exists) {
