@@ -1,19 +1,25 @@
-# KPR Wildlife Monitoring — Web (dashboard + API)
+# KPR Wildlife Monitoring — Web (dashboard + API + PWA build output)
 
 A single Next.js app that replaces the old static HTML admin portal (`web map+admin portal/`)
-and the standalone Express API (`backend api/`). Both now live in **one repo** and deploy
-as **one Vercel project**.
+and the standalone Express API (`backend api/`). This **is** the `jonobenjamin/WildlifeTracker`
+GitHub repo, deployed to **Vercel**.
+
+The `docs/` folder in this repo is the built Flutter PWA output (static export), served via
+**GitHub Pages** from this same repo (Settings → Pages → Deploy from branch → `/docs`). The
+Flutter *source* that produces it lives separately in `PWA Build/` (its own repo,
+`WildlifeTracker-Front_End`) — intentionally kept out of this repo.
 
 ## What's inside
 
 ```
-kpr-web/
+WildlifeTracker/
   app/                 # Pages (App Router): login, map, map-users, admin, reports, vehicles, profile
   components/          # Shared UI: AppShell (sidebar/topbar), LeafletMap, MapLegend, ChartCanvas
   lib/                 # Firebase client/admin, auth context, API helpers, server actions
   server/              # The original Express app (api/*.js, services/*.js) — logic unchanged
-  pages/api/[...path].js  # Bridges the Express app into Next.js so /api/* keeps working as-is
-  public/data/         # Static GeoJSON + icons served directly to the browser
+  pages/api/[[...path]].js  # Bridges the Express app into Next.js so /api/* keeps working as-is
+  public/data/         # Static GeoJSON + icons served directly to the browser (the dashboard's own copy)
+  docs/                # Built Flutter PWA (static site) — served by GitHub Pages, untouched by the Next.js build
 ```
 
 ### Why keep the Express app instead of rewriting every route?
@@ -21,7 +27,7 @@ kpr-web/
 `server/` is the exact same route handlers (`observations`, `trees`, `tracking`, `fires`,
 `water-monitoring`, `auth`, `admin`, `map`, `cron/fire-check`) that already work in production
 against Firestore. Rewriting nine data-integrity-sensitive routes from scratch would be high
-risk for little benefit — instead, `pages/api/[...path].js` exports the Express app directly
+risk for little benefit — instead, `pages/api/[[...path]].js` exports the Express app directly
 (Next.js Pages API routes are plain Node `(req, res)` handlers, and so is an Express app), so
 every existing endpoint is available at the same paths, in the same repo, on the same Vercel
 deployment as the dashboard.
@@ -65,9 +71,11 @@ See [`DEPLOY.md`](./DEPLOY.md).
 | `/vehicles` | admin | `vehicle-tracker.html` |
 | `/profile` | everyone | `profile.html` |
 
-## Note on the PWA
+## The PWA (`docs/`)
 
-The Flutter field PWA (`PWA Build/` source, `docs/` build output) is intentionally **not**
-part of this repo/deployment — it stays in its own repo deployed to GitHub Pages, per the
-project's split: this repo is the website/dashboard on Vercel, the PWA is the offline field
-app on GitHub Pages.
+The `docs/` folder here is only the **build output** of the Flutter field PWA — it's what
+GitHub Pages serves. It's not part of the Next.js app or build (Next.js only builds `app/`,
+`components/`, `lib/`, `server/`, `pages/api/`), it just rides along in the same git repo so
+that "the dashboard repo" and "the PWA-hosting repo" are one and the same, per the project's
+current layout. Rebuild it from `PWA Build/` (a separate repo/folder) with `build-app.sh`, then
+copy the output back into this `docs/` folder and commit.

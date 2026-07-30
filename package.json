@@ -1,5 +1,5 @@
 {
-  "name": "kpr-web",
+  "name": "wildlife-tracker",
   "version": "1.0.0",
   "private": true,
   "description": "KPR Wildlife Monitoring — dashboard, admin portal and API (single Next.js app, deployed on Vercel).",
