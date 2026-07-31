@@ -385,14 +385,27 @@ router.post('/', upload.single('image'), async (req, res) => {
       notification = { success: false, reason: error.message };
     }
 
+    // Persist result on the Firestore doc so you can see why email did/didn't send
+    try {
+      await docRef.set(
+        {
+          notification,
+          notificationAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch (persistErr) {
+      console.warn('Could not persist notification result:', persistErr.message);
+    }
+
     res.status(201).json({
       success: true,
       message: 'Observation created successfully',
       data: {
         id: docRef.id,
-        ...observationData
+        ...observationData,
+        notification,
       },
-      // Helps debug Admin rules / Resend without opening Vercel logs
       notification,
     });
 

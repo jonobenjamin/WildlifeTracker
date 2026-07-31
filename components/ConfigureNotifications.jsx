@@ -15,6 +15,7 @@ import {
   getResendStatus,
   sendTestNotificationEmail,
 } from '@/lib/actions/notificationRules';
+import { replayLatestSightingAlert, replayObservationAlert } from '@/lib/actions/observationAlerts';
 
 export default function ConfigureNotifications({ users = [] }) {
   const [open, setOpen] = useState(false);
@@ -31,6 +32,9 @@ export default function ConfigureNotifications({ users = [] }) {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [allItems, setAllItems] = useState(false);
   const [testUserId, setTestUserId] = useState('');
+  const [replayId, setReplayId] = useState('');
+  const [replayAnimal, setReplayAnimal] = useState('Lion');
+  const [replayMsg, setReplayMsg] = useState(null);
 
   const emailUsers = useMemo(
     () =>
@@ -148,6 +152,46 @@ export default function ConfigureNotifications({ users = [] }) {
     }
   }
 
+  async function handleReplayLatest() {
+    setBusy(true);
+    setReplayMsg(null);
+    setError(null);
+    try {
+      const res = await replayLatestSightingAlert(replayAnimal);
+      if (res?.success === false) {
+        throw new Error(
+          res.error ||
+            res.result?.reason ||
+            'Replay failed — check that a Sightings rule matches this species'
+        );
+      }
+      setReplayMsg(
+        `Alert sent for ${res.animal || replayAnimal} (${res.observationId}). Check inbox.`
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleReplayById() {
+    setBusy(true);
+    setReplayMsg(null);
+    setError(null);
+    try {
+      const res = await replayObservationAlert(replayId);
+      if (res?.success === false) {
+        throw new Error(res.error || res.result?.reason || 'Replay failed');
+      }
+      setReplayMsg(`Alert sent for observation ${res.observationId}. Check inbox.`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function userLabel(id) {
     const u = users.find((x) => x.id === id);
     if (!u) return id;
@@ -239,6 +283,54 @@ export default function ConfigureNotifications({ users = [] }) {
             </button>
           </div>
           {testMsg && <p className="text-sm text-green-800">{testMsg}</p>}
+
+          <div className="rounded-portal border border-portal-border p-4 space-y-3 bg-portal-surface-muted/30">
+            <h3 className="text-sm font-semibold">Replay sighting alert (from Firestore)</h3>
+            <p className="text-xs text-portal-text-muted">
+              Your Firebase docs look like <code>category: Sighting</code> + <code>animal: Lion</code> —
+              that is correct. Use this to email from an observation already saved in Firestore (proves
+              rules + Resend without waiting for a new field submission).
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="kpr-label">Species</label>
+                <input
+                  className="kpr-input"
+                  value={replayAnimal}
+                  onChange={(e) => setReplayAnimal(e.target.value)}
+                  placeholder="Lion"
+                />
+              </div>
+              <button
+                type="button"
+                className="kpr-btn"
+                disabled={busy || !replayAnimal}
+                onClick={handleReplayLatest}
+              >
+                Email latest {replayAnimal || 'sighting'}
+              </button>
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[220px]">
+                <label className="kpr-label">Or observation document ID</label>
+                <input
+                  className="kpr-input"
+                  value={replayId}
+                  onChange={(e) => setReplayId(e.target.value)}
+                  placeholder="Paste Firestore document id"
+                />
+              </div>
+              <button
+                type="button"
+                className="kpr-btn-secondary"
+                disabled={busy || !replayId.trim()}
+                onClick={handleReplayById}
+              >
+                Replay by ID
+              </button>
+            </div>
+            {replayMsg && <p className="text-sm text-green-800">{replayMsg}</p>}
+          </div>
 
           <p className="text-sm text-portal-text-muted">
             Choose a submission type, the specific items to watch, and which users receive the email.
