@@ -1,3 +1,6 @@
 {
-  "crons": [{ "path": "/api/cron/fire-check", "schedule": "0 4 * * *" }]
+  "crons": [
+    { "path": "/api/cron/fire-check", "schedule": "0 4 * * *" },
+    { "path": "/api/cron/notify-flush", "schedule": "*/15 * * * *" }
+  ]
 }

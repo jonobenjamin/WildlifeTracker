@@ -15,7 +15,12 @@ import {
   getResendStatus,
   sendTestNotificationEmail,
 } from '@/lib/actions/notificationRules';
-import { replayLatestSightingAlert, replayObservationAlert } from '@/lib/actions/observationAlerts';
+import {
+  diagnoseNotificationSetup,
+  flushPendingObservationAlerts,
+  replayLatestSightingAlert,
+  replayObservationAlert,
+} from '@/lib/actions/observationAlerts';
 
 export default function ConfigureNotifications({ users = [] }) {
   const [open, setOpen] = useState(false);
@@ -35,6 +40,7 @@ export default function ConfigureNotifications({ users = [] }) {
   const [replayId, setReplayId] = useState('');
   const [replayAnimal, setReplayAnimal] = useState('Lion');
   const [replayMsg, setReplayMsg] = useState(null);
+  const [diag, setDiag] = useState(null);
 
   const emailUsers = useMemo(
     () =>
@@ -152,6 +158,43 @@ export default function ConfigureNotifications({ users = [] }) {
     }
   }
 
+  async function handleDiagnose() {
+    setBusy(true);
+    setError(null);
+    setDiag(null);
+    try {
+      const res = await diagnoseNotificationSetup();
+      if (res?.success === false) throw new Error(res.error || 'Diagnose failed');
+      setDiag(res);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleFlush() {
+    setBusy(true);
+    setReplayMsg(null);
+    setError(null);
+    try {
+      const res = await flushPendingObservationAlerts({ hours: 168, force: true, limit: 30 });
+      if (res?.success === false) throw new Error(res.error || 'Flush failed');
+      const firstFail = (res.results || []).find((r) => r.success === false);
+      setReplayMsg(
+        `${res.message}.` +
+          (firstFail ? ` First failure: ${firstFail.reason || firstFail.error || 'unknown'} (obs ${firstFail.observationId})` : '')
+      );
+      if (res.sent === 0 && res.failed > 0 && firstFail) {
+        setError(firstFail.reason || firstFail.error || 'All alerts failed — see message above');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleReplayLatest() {
     setBusy(true);
     setReplayMsg(null);
@@ -159,15 +202,9 @@ export default function ConfigureNotifications({ users = [] }) {
     try {
       const res = await replayLatestSightingAlert(replayAnimal);
       if (res?.success === false) {
-        throw new Error(
-          res.error ||
-            res.result?.reason ||
-            'Replay failed — check that a Sightings rule matches this species'
-        );
+        throw new Error(res.error || res.reason || 'Replay failed');
       }
-      setReplayMsg(
-        `Alert sent for ${res.animal || replayAnimal} (${res.observationId}). Check inbox.`
-      );
+      setReplayMsg(`Alert sent for ${res.animal || replayAnimal} (${res.observationId}).`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -182,9 +219,9 @@ export default function ConfigureNotifications({ users = [] }) {
     try {
       const res = await replayObservationAlert(replayId);
       if (res?.success === false) {
-        throw new Error(res.error || res.result?.reason || 'Replay failed');
+        throw new Error(res.error || res.reason || 'Replay failed');
       }
-      setReplayMsg(`Alert sent for observation ${res.observationId}. Check inbox.`);
+      setReplayMsg(`Alert sent for observation ${res.observationId}.`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -285,13 +322,25 @@ export default function ConfigureNotifications({ users = [] }) {
           {testMsg && <p className="text-sm text-green-800">{testMsg}</p>}
 
           <div className="rounded-portal border border-portal-border p-4 space-y-3 bg-portal-surface-muted/30">
-            <h3 className="text-sm font-semibold">Replay sighting alert (from Firestore)</h3>
+            <h3 className="text-sm font-semibold">Fix stuck alerts</h3>
             <p className="text-xs text-portal-text-muted">
-              Your Firebase docs look like <code>category: Sighting</code> + <code>animal: Lion</code> —
-              that is correct. Use this to email from an observation already saved in Firestore (proves
-              rules + Resend without waiting for a new field submission).
+              Plain test emails can work while sighting alerts fail (rules/recipients). Use these to
+              see the real error and force-send for recent Firestore observations.
             </p>
-            <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className="kpr-btn-secondary" disabled={busy} onClick={handleDiagnose}>
+                Diagnose rules
+              </button>
+              <button type="button" className="kpr-btn" disabled={busy} onClick={handleFlush}>
+                Send alerts for recent observations
+              </button>
+            </div>
+            {diag && (
+              <pre className="text-[11px] overflow-auto max-h-48 rounded-portal bg-black/5 p-3 whitespace-pre-wrap">
+                {JSON.stringify(diag, null, 2)}
+              </pre>
+            )}
+            <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-portal-border">
               <div>
                 <label className="kpr-label">Species</label>
                 <input
@@ -303,7 +352,7 @@ export default function ConfigureNotifications({ users = [] }) {
               </div>
               <button
                 type="button"
-                className="kpr-btn"
+                className="kpr-btn-secondary"
                 disabled={busy || !replayAnimal}
                 onClick={handleReplayLatest}
               >
@@ -334,9 +383,7 @@ export default function ConfigureNotifications({ users = [] }) {
 
           <p className="text-sm text-portal-text-muted">
             Choose a submission type, the specific items to watch, and which users receive the email.
-            Sightings, incidents, and maintenance alert from <strong>anywhere</strong> (not limited to
-            the concession). Only fire alerts use the Okavango Delta / KPR area. Species/type must match
-            your rule (or select All). Use <strong>Send test</strong> first to confirm Resend works.
+            Sightings alert from anywhere. Species must match your rule (or select All).
           </p>
 
           <form onSubmit={handleCreate} className="space-y-5 pb-6 border-b border-portal-border">

@@ -131,6 +131,7 @@ app.use('/api/auth', require('./api/auth'));
 app.use('/api/admin', require('./api/admin'));
 app.use('/api/fires', require('./api/fires')(db));
 app.use('/api/cron/fire-check', require('./api/cron-fire-check'));
+app.use('/api/cron/notify-flush', require('./api/cron-notify-flush'));
 app.use('/api/water-monitoring', require('./api/water-monitoring')(db));
 app.use('/api/tracking', require('./api/tracking')(db));
 app.use('/api/trees', require('./api/trees')(db));
