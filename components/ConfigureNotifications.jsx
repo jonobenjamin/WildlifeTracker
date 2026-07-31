@@ -47,6 +47,8 @@ export default function ConfigureNotifications({ users = [] }) {
     setError(null);
     try {
       const [rulesRes, status] = await Promise.all([listNotificationRules(), getResendStatus()]);
+      if (rulesRes?.success === false) throw new Error(rulesRes.error || 'Failed to load rules');
+      if (status?.success === false) throw new Error(status.error || 'Failed to read Resend status');
       setRules(rulesRes.rules || []);
       setResendStatus(status);
       setLoadedOnce(true);
@@ -85,11 +87,12 @@ export default function ConfigureNotifications({ users = [] }) {
     setError(null);
     try {
       const items = allItems ? [ALL_ITEMS_VALUE] : selectedItems;
-      await createNotificationRule({
+      const res = await createNotificationRule({
         category,
         items,
         userIds: selectedUsers,
       });
+      if (res?.success === false) throw new Error(res.error || 'Failed to save rule');
       setSelectedItems([]);
       setSelectedUsers([]);
       setAllItems(false);
@@ -105,7 +108,8 @@ export default function ConfigureNotifications({ users = [] }) {
     if (!confirm('Delete this notification rule?')) return;
     setBusy(true);
     try {
-      await deleteNotificationRule(id);
+      const res = await deleteNotificationRule(id);
+      if (res?.success === false) throw new Error(res.error || 'Failed to delete');
       await refreshRules();
     } catch (err) {
       alert(err.message);
@@ -117,7 +121,8 @@ export default function ConfigureNotifications({ users = [] }) {
   async function handleToggle(rule) {
     setBusy(true);
     try {
-      await setNotificationRuleEnabled(rule.id, !rule.enabled);
+      const res = await setNotificationRuleEnabled(rule.id, !rule.enabled);
+      if (res?.success === false) throw new Error(res.error || 'Failed to update');
       await refreshRules();
     } catch (err) {
       alert(err.message);
@@ -132,6 +137,7 @@ export default function ConfigureNotifications({ users = [] }) {
     setError(null);
     try {
       const res = await sendTestNotificationEmail(testUserId || emailUsers[0]?.id);
+      if (res?.success === false) throw new Error(res.error || 'Test email failed');
       setTestMsg(`Test email sent to ${res.email}`);
     } catch (err) {
       setError(err.message);
