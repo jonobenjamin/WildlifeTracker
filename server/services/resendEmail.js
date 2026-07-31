@@ -12,7 +12,8 @@ function getResendClient() {
 
 function fromAddress() {
   const email = (process.env.RESEND_FROM_EMAIL || '').trim();
-  if (!email) return null;
+  // Catch common Vercel misconfig where the value was set to the variable NAME
+  if (!email || !email.includes('@') || email === 'RESEND_FROM_EMAIL') return null;
   const name = (process.env.EMAIL_FROM_NAME || 'KPR Wildlife Tracker').trim();
   return name ? `${name} <${email}>` : email;
 }

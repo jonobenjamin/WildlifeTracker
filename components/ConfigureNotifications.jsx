@@ -185,6 +185,13 @@ export default function ConfigureNotifications({ users = [] }) {
               <>
                 Resend configured — from <strong>{resendStatus.fromEmail}</strong>
               </>
+            ) : resendStatus?.fromRawInvalid ? (
+              <>
+                Resend API key is set, but <code className="text-xs">RESEND_FROM_EMAIL</code> is
+                invalid (<code className="text-xs">{resendStatus.fromRawInvalid}</code>). In Vercel
+                set it to a real address like <code className="text-xs">alerts@okavangowater.com</code>
+                , then redeploy.
+              </>
             ) : (
               <>
                 Resend is <strong>not configured</strong>. In Vercel set your Okavango Water{' '}
