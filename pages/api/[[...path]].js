@@ -10,6 +10,8 @@ export const config = {
     bodyParser: false, // let Express's own express.json() read the raw stream
     externalResolver: true,
   },
+  // Observation create + Resend can exceed the default 10s on cold starts
+  maxDuration: 60,
 };
 
 export default function handler(req, res) {

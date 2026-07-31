@@ -124,6 +124,7 @@ app.get('/api', (req, res) => {
 });
 
 app.use('/api/health', require('./api/health'));
+app.use('/api/notifications', require('./api/notifications'));
 app.use('/api/observations', require('./api/observations')(db));
 app.use('/api/map', require('./api/map'));
 app.use('/api/auth', require('./api/auth'));
