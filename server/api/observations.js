@@ -370,45 +370,54 @@ router.post('/', upload.single('image'), async (req, res) => {
 
     console.log('Successfully saved to Firestore with ID:', docRef.id);
 
-    // Notify users based on admin Configure Notifications rules (Resend)
     const savedObservation = {
       id: docRef.id,
-      ...observationData
+      ...observationData,
     };
 
-    let notification = null;
-    try {
-      notification = await sendObservationNotification(savedObservation);
-      console.log('Observation notification result:', notification);
-    } catch (error) {
-      console.error('Email notification failed:', error);
-      notification = { success: false, reason: error.message };
-    }
-
-    // Persist result on the Firestore doc so you can see why email did/didn't send
-    try {
-      await docRef.set(
-        {
-          notification,
-          notificationAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
-    } catch (persistErr) {
-      console.warn('Could not persist notification result:', persistErr.message);
-    }
-
+    // Respond immediately so the field PWA (10s timeout) does not abort the
+    // request before Resend finishes. Email runs in the background via waitUntil.
     res.status(201).json({
       success: true,
       message: 'Observation created successfully',
       data: {
         id: docRef.id,
         ...observationData,
-        notification,
       },
-      notification,
+      notification: { pending: true },
     });
 
+    const notifyPromise = (async () => {
+      let notification = null;
+      try {
+        notification = await sendObservationNotification(savedObservation);
+        console.log('Observation notification result:', notification);
+      } catch (error) {
+        console.error('Email notification failed:', error);
+        notification = { success: false, reason: error.message };
+      }
+      try {
+        await docRef.set(
+          {
+            notification,
+            notificationAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      } catch (persistErr) {
+        console.warn('Could not persist notification result:', persistErr.message);
+      }
+      return notification;
+    })();
+
+    try {
+      const { waitUntil } = require('@vercel/functions');
+      waitUntil(notifyPromise);
+    } catch {
+      // Local / non-Vercel: still fire-and-forget (do not await — response already sent)
+      notifyPromise.catch((err) => console.error('background notify failed:', err));
+    }
+    return;
   } catch (error) {
     console.error('Error creating observation:', error);
     console.error('Error details:', {
