@@ -166,13 +166,13 @@ const sendObservationNotification = async (observation) => {
 
   if (categoryRaw === 'sighting') {
     category = 'sighting';
-    item = observation.animal;
+    item = observation.animal || observation.Animal || observation.species || observation.vulture_species;
     subject = `Sighting alert: ${item || 'Animal'} — KPR`;
     heading = 'SIGHTING ALERT';
     intro = `A new ${item || 'animal'} sighting was submitted.`;
   } else if (categoryRaw === 'incident') {
     category = 'incident';
-    item = observation.incident_type;
+    item = observation.incident_type || observation.incidentType;
     const isPoach = isPoachingIncident(observation);
     subject = isPoach
       ? 'POACHING INCIDENT ALERT — KPR'
@@ -184,14 +184,21 @@ const sendObservationNotification = async (observation) => {
     accent = '#b42318';
   } else if (categoryRaw === 'maintenance') {
     category = 'maintenance';
-    item = observation.maintenance_type;
+    item = observation.maintenance_type || observation.maintenanceType;
     subject = `Maintenance alert: ${item || 'Issue'} — KPR`;
     heading = 'MAINTENANCE ALERT';
     intro = `A maintenance report was submitted: ${item || 'issue'}.`;
     accent = '#c9a96b';
   } else {
-    return { success: false, reason: 'Unsupported category' };
+    return { success: false, reason: `Unsupported category: ${observation.category}` };
   }
+
+  console.log('[notifications] observation event', {
+    id: observation.id,
+    category,
+    item,
+    resendConfigured: isConfigured(),
+  });
 
   // Sightings / incidents / maintenance: no map-boundary filter — anywhere is fine.
   const recipients = await resolveRecipients(category, item);

@@ -60,8 +60,10 @@ export default function ConfigureNotifications({ users = [] }) {
   }
 
   useEffect(() => {
-    if (open && !loadedOnce) refreshRules();
-  }, [open, loadedOnce]);
+    // Load status/rules as soon as Admin mounts so the collapsed header is accurate
+    refreshRules();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     setSelectedItems([]);
@@ -165,12 +167,15 @@ export default function ConfigureNotifications({ users = [] }) {
         <div>
           <h2 className="text-base font-semibold">Configure Notifications</h2>
           <p className="text-sm text-portal-text-muted mt-0.5">
-            {ruleCount > 0 ? `${ruleCount} rule${ruleCount === 1 ? '' : 's'}` : 'No rules yet'}
-            {resendStatus
-              ? resendStatus.configured
-                ? ' · Resend ready'
-                : ' · Resend not configured'
-              : ''}
+            {loading && !loadedOnce
+              ? 'Loading…'
+              : `${ruleCount} rule${ruleCount === 1 ? '' : 's'}${
+                  resendStatus
+                    ? resendStatus.configured
+                      ? ' · Resend ready'
+                      : ' · Resend not configured'
+                    : ''
+                }`}
           </p>
         </div>
         <span className="text-portal-text-muted text-lg leading-none" aria-hidden>

@@ -1,13 +1,12 @@
 /**
  * Shared Resend sender for Express (CJS) routes.
+ * Uses Resend HTTP API (same path as Admin "Send test") — more reliable on Vercel
+ * than the Resend Node SDK inside the Express bridge.
  * Env: RESEND_API_KEY, RESEND_FROM_EMAIL, EMAIL_FROM_NAME (optional)
  */
-const { Resend } = require('resend');
 
-function getResendClient() {
-  const apiKey = (process.env.RESEND_API_KEY || '').trim();
-  if (!apiKey) return null;
-  return new Resend(apiKey);
+function apiKey() {
+  return (process.env.RESEND_API_KEY || '').trim();
 }
 
 function fromAddress() {
@@ -19,16 +18,16 @@ function fromAddress() {
 }
 
 function isConfigured() {
-  return !!(getResendClient() && fromAddress());
+  return !!(apiKey() && fromAddress());
 }
 
 /**
  * @param {{ to: string|string[], subject: string, html: string, text?: string }} opts
  */
 async function sendResendEmail({ to, subject, html, text }) {
-  const resend = getResendClient();
+  const key = apiKey();
   const from = fromAddress();
-  if (!resend || !from) {
+  if (!key || !from) {
     return { success: false, reason: 'Resend not configured (RESEND_API_KEY / RESEND_FROM_EMAIL)' };
   }
 
@@ -43,19 +42,28 @@ async function sendResendEmail({ to, subject, html, text }) {
   const results = [];
   for (const recipient of recipients) {
     try {
-      const { data, error } = await resend.emails.send({
-        from,
-        to: [recipient],
-        subject,
-        html,
-        text: text || undefined,
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from,
+          to: [recipient],
+          subject,
+          html,
+          text: text || undefined,
+        }),
       });
-      if (error) {
-        console.error(`Resend failed for ${recipient}:`, error);
-        results.push({ success: false, recipient, error: error.message || String(error) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const errMsg = body?.message || body?.error || `Resend HTTP ${res.status}`;
+        console.error(`Resend failed for ${recipient}:`, errMsg);
+        results.push({ success: false, recipient, error: String(errMsg) });
       } else {
-        results.push({ success: true, recipient, messageId: data?.id });
-        console.log(`Resend email sent to ${recipient}:`, data?.id);
+        results.push({ success: true, recipient, messageId: body?.id });
+        console.log(`Resend email sent to ${recipient}:`, body?.id);
       }
     } catch (err) {
       console.error(`Resend exception for ${recipient}:`, err);
