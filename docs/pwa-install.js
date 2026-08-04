@@ -12,7 +12,7 @@
     btn.id = 'pwa-install-btn';
     btn.type = 'button';
     btn.innerHTML = '&#x2193; Download app';
-    btn.title = 'Install KPR Monitor app on your device';
+    btn.title = 'Install KPR Sighting App on your device';
     btn.setAttribute('aria-label', 'Install app');
 
     Object.assign(btn.style, {

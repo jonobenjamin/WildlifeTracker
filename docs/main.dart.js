@@ -100149,7 +100149,7 @@ if(m.cM(0,"selectedUser")==null)m.el(A.a6(["selectedUser","Unknown User"],t.z,m.
 p.I(new A.aDF(p))
 case 1:return A.F(q,r)}})
 return A.G($async$GI,r)},
-N(a){var s="KPR monitoring app",r=null
+N(a){var s="KPR Sighting App",r=null
 if(this.f)return B.Ub
 return new A.xZ(new A.EN(s,this.e,r),s,A.v3(r,A.aSq(B.ao,r,r,B.Ud),r),r)}}
 A.aDE.prototype={

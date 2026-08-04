@@ -20,7 +20,7 @@ class AuthUI {
     container.innerHTML = `
       <div id="auth-container">
         <div id="auth-header">
-          <h2>Sign In to KPR Monitoring</h2>
+          <h2>Sign In to KPR Sighting App</h2>
         </div>
         <div id="auth-content"></div>
         <div id="recaptcha-container"></div>

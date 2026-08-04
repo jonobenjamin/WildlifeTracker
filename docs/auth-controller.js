@@ -102,7 +102,7 @@ class AuthController {
           background:white;border-radius:16px;padding:24px;
           max-width:400px;width:100%;text-align:center;
           box-shadow:0 10px 25px rgba(0,0,0,0.3);">
-          <h2 style="margin:0 0 16px;color:#333;font-size:22px;">KPR Monitor</h2>
+          <h2 style="margin:0 0 16px;color:#333;font-size:22px;">KPR Sighting App</h2>
           <div style="font-size:40px;margin-bottom:16px;">📵</div>
           <p style="color:#555;margin-bottom:16px;font-size:15px;line-height:1.5;">
             You're offline and haven't logged in on this device yet.

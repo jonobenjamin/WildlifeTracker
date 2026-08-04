@@ -68,7 +68,7 @@ export default function AppShell({ title, children }) {
           })}
         </nav>
         <a
-          href="https://jonobenjamin.github.io/KPR_PWA/"
+          href="https://kpr-sightings.okavangowater.com"
           target="_blank"
           rel="noreferrer"
           className="mx-2 mb-4 mt-auto border-t border-white/10 px-3 pt-3.5 text-xs font-semibold"
