@@ -433,6 +433,78 @@ router.post('/', upload.single('image'), async (req, res) => {
   }
 });
 
+// Animals that must never appear on the public field-map "recent sightings" layer.
+const RECENT_MAP_EXCLUDED_ANIMALS = ['pangolin', 'rhino'];
+
+function isExcludedFromRecentMap(animal) {
+  const a = String(animal || '').toLowerCase().trim();
+  if (!a) return false;
+  return RECENT_MAP_EXCLUDED_ANIMALS.some(
+    (blocked) => a === blocked || a.includes(blocked)
+  );
+}
+
+/**
+ * GET /api/observations/recent-map
+ * Sightings from the past 3 days for the field PWA map.
+ * Never returns Pangolin or Rhino (or any animal name containing those words).
+ * Returns only map-safe fields (no images / incident extras).
+ */
+router.get('/recent-map', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not available',
+      });
+    }
+
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 3, 1), 7);
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const snapshot = await db
+      .collection('observations')
+      .orderBy('timestamp', 'desc')
+      .get();
+
+    const observations = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data() || {};
+      if (String(data.category || '').toLowerCase() !== 'sighting') return;
+      if (data.latitude === undefined || data.longitude === undefined) return;
+      if (isExcludedFromRecentMap(data.animal)) return;
+
+      const ts = data.timestamp ? new Date(data.timestamp) : null;
+      if (!ts || Number.isNaN(ts.getTime()) || ts < cutoff) return;
+
+      observations.push({
+        id: doc.id,
+        category: 'Sighting',
+        animal: data.animal,
+        activity: data.activity || null,
+        age: data.age || null,
+        latitude: Number(data.latitude),
+        longitude: Number(data.longitude),
+        timestamp: data.timestamp,
+        user: data.user || null,
+      });
+    });
+
+    res.json({
+      success: true,
+      days,
+      count: observations.length,
+      data: observations,
+    });
+  } catch (error) {
+    console.error('GET /api/observations/recent-map error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch recent map sightings',
+    });
+  }
+});
+
 // GET /api/observations/:id/image - Secure image access
 router.get('/:id/image', async (req, res) => {
   try {
