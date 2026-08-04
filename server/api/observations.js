@@ -406,7 +406,7 @@ router.post('/', upload.single('image'), async (req, res) => {
     }
 
     // Validate poaching type for poaching incidents
-    const validPoachingTypes = ['Carcass', 'Snare', 'Poacher'];
+    const validPoachingTypes = ['Carcass', 'Snare', 'Poacher', 'Fishing net/equipment'];
     if (category === 'Incident' && incident_type && incident_type.toLowerCase().includes('poach')) {
       if (!poaching_type || !validPoachingTypes.includes(poaching_type)) {
         return res.status(400).json({
