@@ -3,10 +3,10 @@ const MANIFEST = 'flutter-app-manifest';
 const TEMP = 'flutter-temp-cache';
 const CACHE_NAME = 'flutter-app-cache';
 
-const RESOURCES = {"flutter_bootstrap.js": "d1cd61bba4e2fdd554223f7d9cf4c97f",
+const RESOURCES = {"flutter_bootstrap.js": "3f2b297e197204a7fa242f7ed87b3582",
 "version.json": "954e0901788d4c159b41e9c4f779f3f5",
-"index.html": "cbb956f6720a915b5fedf77b41245137",
-"/": "cbb956f6720a915b5fedf77b41245137",
+"index.html": "2c6ce64cf5ceaadcfd97981826222355",
+"/": "2c6ce64cf5ceaadcfd97981826222355",
 "main.dart.js": "34473a70f8ae9932ea78a49a50f4872e",
 "flutter.js": "24bc71911b75b5f8135c949e27a2984e",
 "favicon.png": "5dcef449791fa27946b3d35ad8803796",
@@ -91,7 +91,7 @@ self.addEventListener("activate", function(event) {
       var origin = self.location.origin;
       for (var request of await contentCache.keys()) {
         var key = request.url.substring(origin.length + 1);
-        if (key.startsWith('KPR_PWA_TEST/')) key = key.substring(13);
+        if (key.startsWith('WildlifeTracker/docs/')) key = key.substring(21);
       if (key == "") {
           key = "/";
         }
@@ -152,7 +152,7 @@ self.addEventListener("fetch", (event) => {
 
   var origin = self.location.origin;
   var key = event.request.url.substring(origin.length + 1);
-  const BASE_PATH = 'KPR_PWA_TEST';
+  const BASE_PATH = 'WildlifeTracker/docs';
   // Normalize key for base path deployment (Flutter RESOURCES use paths without base)
   if (key.startsWith(BASE_PATH + '/')) {
     key = key.substring(BASE_PATH.length + 1);
@@ -240,7 +240,7 @@ async function precacheConcessionTiles() {
 
 async function addAllResilient(cache, resourceKeys) {
   var origin = self.location.origin;
-  var basePath = 'KPR_PWA_TEST';
+  var basePath = 'WildlifeTracker/docs';
   await Promise.all(resourceKeys.map(async function(key) {
     var url = origin + '/' + basePath + '/' + key;
     try {
@@ -275,7 +275,7 @@ self.addEventListener('message', (event) => {
 async function downloadOffline() {
   var resources = [];
   var origin = self.location.origin;
-  var basePath = 'KPR_PWA_TEST';
+  var basePath = 'WildlifeTracker/docs';
   var contentCache = await caches.open(CACHE_NAME);
   var currentContent = {};
   for (var request of await contentCache.keys()) {
