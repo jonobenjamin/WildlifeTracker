@@ -116,6 +116,39 @@
     }, 8000);
   </script>
 
+  <!-- Native browser GPS — Flutter reads window.__kprLocation every tick.
+       Keeps a live fix even when Dart geolocation wrappers fail. -->
+  <script>
+    (function () {
+      window.__kprLocation = { lat: null, lon: null, accuracy: null, ts: null, error: null };
+      if (!navigator.geolocation) {
+        window.__kprLocation.error = 'Geolocation not supported';
+        return;
+      }
+      function apply(pos) {
+        window.__kprLocation = {
+          lat: pos.coords.latitude,
+          lon: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          ts: Date.now(),
+          error: null
+        };
+      }
+      function onErr(err) {
+        window.__kprLocation.error = (err && err.message) ? err.message : 'Location error';
+      }
+      var opts = { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 };
+      var optsFresh = { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 };
+      navigator.geolocation.getCurrentPosition(apply, onErr, opts);
+      try {
+        navigator.geolocation.watchPosition(apply, onErr, opts);
+      } catch (e) {}
+      setInterval(function () {
+        navigator.geolocation.getCurrentPosition(apply, function () {}, optsFresh);
+      }, 15000);
+    })();
+  </script>
+
   <!-- Firebase SDKs (type=module → deferred, run after body scripts) -->
   <script type="module" src="firebase-config.js"></script>
   <script type="module" src="auth-service.js"></script>

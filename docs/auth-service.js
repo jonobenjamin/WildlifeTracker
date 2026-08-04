@@ -42,10 +42,36 @@ class AuthService {
       if (user) {
         console.log('User signed in:', user.uid);
         this.updateUserLastLogin(user.uid);
+        this._persistIdToken(user);
+        // Refresh token into localStorage before it expires (~1h).
+        if (this._tokenRefreshTimer) clearInterval(this._tokenRefreshTimer);
+        this._tokenRefreshTimer = setInterval(() => {
+          if (this.auth?.currentUser) this._persistIdToken(this.auth.currentUser);
+        }, 45 * 60 * 1000);
       } else {
         console.log('User signed out');
+        try {
+          localStorage.removeItem('firebaseIdToken');
+          localStorage.removeItem('firebaseIdTokenAt');
+        } catch (_) {}
+        if (this._tokenRefreshTimer) {
+          clearInterval(this._tokenRefreshTimer);
+          this._tokenRefreshTimer = null;
+        }
       }
     });
+  }
+
+  async _persistIdToken(user) {
+    try {
+      const token = await user.getIdToken(true);
+      if (token) {
+        localStorage.setItem('firebaseIdToken', token);
+        localStorage.setItem('firebaseIdTokenAt', String(Date.now()));
+      }
+    } catch (e) {
+      console.warn('AuthService: could not persist ID token', e);
+    }
   }
 
   waitForFirebase() {
