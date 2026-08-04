@@ -3,11 +3,11 @@ const MANIFEST = 'flutter-app-manifest';
 const TEMP = 'flutter-temp-cache';
 const CACHE_NAME = 'flutter-app-cache';
 
-const RESOURCES = {"flutter_bootstrap.js": "10e3a25ffc98f3f7567e25dac90f066f",
+const RESOURCES = {"flutter_bootstrap.js": "a1401d9acff438a237be4fdba75d5f9d",
 "version.json": "954e0901788d4c159b41e9c4f779f3f5",
 "index.html": "7deddc2d878f73aaec58bfbde60c43cb",
 "/": "7deddc2d878f73aaec58bfbde60c43cb",
-"main.dart.js": "1fdf4f7ea7de67a7c3114ed4de6ade88",
+"main.dart.js": "e3e073b66c73c217c2b4faf7f721c50d",
 "flutter.js": "24bc71911b75b5f8135c949e27a2984e",
 "favicon.png": "5dcef449791fa27946b3d35ad8803796",
 "icons/Icon-192.png": "0658615ef1bdea8a662d5bb1c68d97b6",
@@ -24,7 +24,7 @@ const RESOURCES = {"flutter_bootstrap.js": "10e3a25ffc98f3f7567e25dac90f066f",
 "assets/shaders/ink_sparkle.frag": "ecc85a2e95f5e9f53123dcaf8cb9b6ce",
 "assets/shaders/stretch_effect.frag": "40d68efbbf360632f614c731219e95f0",
 "assets/AssetManifest.bin": "a8cbe03b08af68d0a2398439d21835e9",
-"assets/fonts/MaterialIcons-Regular.otf": "6b01f80ab452790314e9813eec477000",
+"assets/fonts/MaterialIcons-Regular.otf": "633fbc515d5ff7a89de0b3078c451897",
 "assets/assets/Consession_boundary.geojson": "7f04e0566b20c6e8e96feca2a9a4031e",
 "assets/assets/images/KPR_logo.png": "f70391debeb086a102e3f8fe1a447937",
 "assets/assets/images/KPR_PWA_Background_image.png": "72e974e963f2e43a63b6b259b330fbae",
@@ -192,12 +192,14 @@ function lat2tile(lat, zoom) {
 async function precacheConcessionTiles() {
   var cache = await caches.open('osm-tiles');
   var minLat = -19.25, maxLat = -18.65, minLon = 23.45, maxLon = 23.95;
-  for (var z = 10; z <= 13; z++) {
+  var hosts = ['a', 'b', 'c', 'd'];
+  for (var z = 10; z <= 14; z++) {
     var xMin = lon2tile(minLon, z), xMax = lon2tile(maxLon, z);
     var yMin = lat2tile(maxLat, z), yMax = lat2tile(minLat, z);
     for (var x = xMin; x <= xMax; x++) {
       for (var y = yMin; y <= yMax; y++) {
-        var url = 'https://tile.openstreetmap.org/' + z + '/' + x + '/' + y + '.png';
+        var host = hosts[(x + y) % hosts.length];
+        var url = 'https://' + host + '.basemaps.cartocdn.com/rastertiles/voyager/' + z + '/' + x + '/' + y + '.png';
         try {
           var existing = await cache.match(url);
           if (existing) continue;
