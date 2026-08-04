@@ -89,18 +89,34 @@ Upstream partner endpoints (server-side only):
 `GET https://okavangowater.com/api/partners/$OKAVANGO_PARTNER_SLUG`
 and `.../image?date=YYYYMMDD` with header `X-API-Key: $OKAVANGO_API_KEY`.
 
-## 3. GitHub Pages settings (for the PWA in `docs/`)
+## 3. Field PWA (`docs/`) on Vercel — `kpr-sightings.okavangowater.com`
 
-On the same `WildlifeTracker` repo: **Settings → Pages → Build and deployment → Deploy from a
-branch → Branch: `main`, folder: `/docs`**. This replaces whatever repo/Pages source the PWA
-used to be served from (e.g. a separate `KPR_PWA` repo) — going forward there's one repo for
-both deployments.
+The Flutter field app is the prebuilt contents of `docs/`. Deploy it as a **separate**
+Vercel project from the Next.js API/dashboard (`khwai-private-reserve`).
 
-## 4. Point the PWA / other clients at the new API host
+1. Rebuild/publish with root base href (from the parent `PWA tracker` workspace):
+   `./build-app.sh` → writes into `WildlifeTracker/docs/` with `<base href="/">`.
+2. In Vercel → **Add New Project** → import `jonobenjamin/WildlifeTracker`.
+3. Project settings:
+   - **Root Directory:** `docs`
+   - **Framework Preset:** Other
+   - **Build Command:** leave empty
+   - **Output Directory:** `.` (or leave blank so Vercel serves the root of `docs`)
+4. Deploy, then **Settings → Domains** → add `kpr-sightings.okavangowater.com`.
+5. DNS at `okavangowater.com`: **CNAME** `kpr-sightings` → `cname.vercel-dns.com`
+   (or the target Vercel shows).
+6. Do **not** attach this domain to `khwai-private-reserve` — that project is the
+   Next.js API/dashboard at `khwaiprivate.okavangowater.com`.
 
-The Flutter PWA and any other client currently pointing at
-`https://wildlife-tracker-gxz5.vercel.app` (or whatever the old backend project's URL was)
-should be updated to this Vercel project's URL.
+The PWA continues to call the API at `https://khwaiprivate.okavangowater.com`
+(auth + observations/trees). CORS already allows `*.okavangowater.com`.
+
+GitHub Pages under `/docs` is optional/legacy once the Vercel domain is live.
+
+## 4. Point the PWA / other clients at the API host
+
+Field clients should use `https://khwaiprivate.okavangowater.com` (project
+`khwai-private-reserve`), not the old Express project `wildlife-tracker-gxz5`.
 
 ## 5. Firestore security rules
 
@@ -110,10 +126,10 @@ same client SDK config in the browser.
 
 ## 6. Decommissioning old repos/projects (once verified)
 
-Once this repo is live and verified on both Vercel and GitHub Pages:
+Once this repo is live and verified on Vercel (API + PWA subdomain):
 - The old separate backend Vercel project can be paused/removed.
-- The old `KPR_PWA` repo/Pages site (if it was previously the PWA's GitHub Pages source) can be
-  retired in favour of this repo's `/docs`.
+- The old `KPR_PWA` / GitHub Pages PWA URL can be retired in favour of
+  `https://kpr-sightings.okavangowater.com`.
 - Locally, the superseded `backend api/`, `web map+admin portal/`, and legacy `auth/`
   microservice folders have already been removed from the `PWA tracker` workspace as part of
   this consolidation.

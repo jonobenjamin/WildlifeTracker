@@ -3,10 +3,10 @@ const MANIFEST = 'flutter-app-manifest';
 const TEMP = 'flutter-temp-cache';
 const CACHE_NAME = 'flutter-app-cache';
 
-const RESOURCES = {"flutter_bootstrap.js": "3f2b297e197204a7fa242f7ed87b3582",
+const RESOURCES = {"flutter_bootstrap.js": "bd0bab2e7aabca826ad0cf51b71c425d",
 "version.json": "954e0901788d4c159b41e9c4f779f3f5",
-"index.html": "2c6ce64cf5ceaadcfd97981826222355",
-"/": "2c6ce64cf5ceaadcfd97981826222355",
+"index.html": "7deddc2d878f73aaec58bfbde60c43cb",
+"/": "7deddc2d878f73aaec58bfbde60c43cb",
 "main.dart.js": "34473a70f8ae9932ea78a49a50f4872e",
 "flutter.js": "24bc71911b75b5f8135c949e27a2984e",
 "favicon.png": "5dcef449791fa27946b3d35ad8803796",
@@ -91,8 +91,7 @@ self.addEventListener("activate", function(event) {
       var origin = self.location.origin;
       for (var request of await contentCache.keys()) {
         var key = request.url.substring(origin.length + 1);
-        if (key.startsWith('WildlifeTracker/docs/')) key = key.substring(21);
-      if (key == "") {
+        if (key == "") {
           key = "/";
         }
         // If a resource from the old manifest is not in the new cache, or if
@@ -129,34 +128,9 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== 'GET') {
     return;
   }
-
-  // Cache OSM tiles for offline use (network-first when online; cache when offline)
-  if (event.request.url.startsWith('https://tile.openstreetmap.org/')) {
-    event.respondWith(
-      caches.open('osm-tiles').then(function(cache) {
-        return fetch(event.request).then(function(response) {
-          if (response && response.ok) {
-            cache.put(event.request, response.clone());
-          }
-          return response;
-        }).catch(function() {
-          return cache.match(event.request).then(function(cached) {
-            if (cached) return cached;
-            return new Response('', { status: 503, statusText: 'Offline — map tile not cached yet' });
-          });
-        });
-      })
-    );
-    return;
-  }
-
   var origin = self.location.origin;
   var key = event.request.url.substring(origin.length + 1);
-  const BASE_PATH = 'WildlifeTracker/docs';
-  // Normalize key for base path deployment (Flutter RESOURCES use paths without base)
-  if (key.startsWith(BASE_PATH + '/')) {
-    key = key.substring(BASE_PATH.length + 1);
-  }
+  const BASE_PATH = '';
   // Redirect URLs to the index.html
   if (key.indexOf('?v=') != -1) {
     key = key.split('?v=')[0];
@@ -176,7 +150,6 @@ self.addEventListener("fetch", (event) => {
       caches.open(CACHE_NAME).then(function(cache) {
         return cache.match(event.request).then(function(cached) {
           if (cached) {
-            // Refresh cache in background when online.
             if (navigator.onLine !== false) {
               fetch(event.request).then(function(res) {
                 if (res && res.ok) cache.put(event.request, res.clone());
@@ -184,7 +157,6 @@ self.addEventListener("fetch", (event) => {
             }
             return cached;
           }
-          // Nothing in cache yet — go to network.
           return fetch(event.request).then(function(res) {
             if (res && res.ok) cache.put(event.request, res.clone());
             return res;
@@ -240,9 +212,11 @@ async function precacheConcessionTiles() {
 
 async function addAllResilient(cache, resourceKeys) {
   var origin = self.location.origin;
-  var basePath = 'WildlifeTracker/docs';
+  var basePath = '';
   await Promise.all(resourceKeys.map(async function(key) {
-    var url = origin + '/' + basePath + '/' + key;
+    var url = basePath
+      ? (origin + '/' + basePath + '/' + key)
+      : (origin + '/' + key);
     try {
       var response = await fetch(url, { cache: 'reload' });
       if (response && response.ok) {
@@ -275,12 +249,12 @@ self.addEventListener('message', (event) => {
 async function downloadOffline() {
   var resources = [];
   var origin = self.location.origin;
-  var basePath = 'WildlifeTracker/docs';
+  var basePath = '';
   var contentCache = await caches.open(CACHE_NAME);
   var currentContent = {};
   for (var request of await contentCache.keys()) {
     var key = request.url.substring(origin.length + 1);
-    if (key.startsWith(basePath + '/')) key = key.substring(basePath.length + 1);
+    if (basePath && key.startsWith(basePath + '/')) key = key.substring(basePath.length + 1);
     if (key == "") {
       key = "/";
     }

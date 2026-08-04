@@ -68,6 +68,7 @@ const allowedOrigins = [
   'http://127.0.0.1:5000',
   'https://jonobenjamin.github.io',
   'https://khwaiprivate.okavangowater.com',
+  'https://kpr-sightings.okavangowater.com',
   'https://khwai-private-reserve.vercel.app',
   ...(process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim()) : []),
 ];
