@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const admin = require('firebase-admin');
 const { getStorage } = require('firebase-admin/storage');
 const { sendObservationNotification } = require('../services/notificationServices');
 
@@ -103,7 +104,152 @@ const validateApiKey = (req, res, next) => {
   next();
 };
 
-// Apply API key validation to all routes
+// Animals that must never appear on the public field-map "recent sightings" layer.
+const RECENT_MAP_EXCLUDED_ANIMALS = ['pangolin', 'rhino'];
+
+function isExcludedFromRecentMap(animal) {
+  const a = String(animal || '').toLowerCase().trim();
+  if (!a) return false;
+  return RECENT_MAP_EXCLUDED_ANIMALS.some(
+    (blocked) => a === blocked || a.includes(blocked)
+  );
+}
+
+/**
+ * recent-map auth: valid shared API key OR Firebase ID token for an
+ * active admin/user (viewers are never allowed).
+ */
+async function requireRecentMapAccess(req, res, next) {
+  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+  if (apiKey && process.env.API_KEY && apiKey === process.env.API_KEY) {
+    req.mapAccessRole = 'admin';
+    return next();
+  }
+
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+      message: 'Sign in required to view recent sightings',
+    });
+  }
+
+  try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    let role = 'user';
+    let status = 'active';
+
+    if (db) {
+      const userDoc = await db.collection('users').doc(decoded.uid).get();
+      if (userDoc.exists) {
+        const data = userDoc.data() || {};
+        role = String(data.role || 'user').toLowerCase();
+        status = String(data.status || 'active').toLowerCase();
+      }
+    }
+
+    if (status === 'revoked') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Your account has been suspended',
+      });
+    }
+
+    if (role === 'viewer') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Viewers cannot access recent sightings',
+      });
+    }
+
+    if (role !== 'admin' && role !== 'user') {
+      return res.status(403).json({
+        success: false,
+        error: 'Forbidden',
+        message: 'Insufficient permissions',
+      });
+    }
+
+    req.mapAccessRole = role;
+    req.mapAccessUid = decoded.uid;
+    return next();
+  } catch (error) {
+    console.error('recent-map auth failed:', error.message);
+    return res.status(401).json({
+      success: false,
+      error: 'Unauthorized',
+      message: 'Invalid or expired session — please sign in again',
+    });
+  }
+}
+
+/**
+ * GET /api/observations/recent-map
+ * Sightings from the past 3 days for the field PWA map.
+ * Never returns Pangolin or Rhino. Viewers cannot access this endpoint.
+ * Registered before the global API-key middleware so field users can use
+ * their Firebase session (the shared API key is often rotated independently).
+ */
+router.get('/recent-map', requireRecentMapAccess, async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({
+        success: false,
+        error: 'Database not available',
+      });
+    }
+
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 3, 1), 7);
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const snapshot = await db
+      .collection('observations')
+      .orderBy('timestamp', 'desc')
+      .get();
+
+    const observations = [];
+    snapshot.forEach((doc) => {
+      const data = doc.data() || {};
+      if (String(data.category || '').toLowerCase() !== 'sighting') return;
+      if (data.latitude === undefined || data.longitude === undefined) return;
+      if (isExcludedFromRecentMap(data.animal)) return;
+
+      const ts = data.timestamp ? new Date(data.timestamp) : null;
+      if (!ts || Number.isNaN(ts.getTime()) || ts < cutoff) return;
+
+      observations.push({
+        id: doc.id,
+        category: 'Sighting',
+        animal: data.animal,
+        activity: data.activity || null,
+        age: data.age || null,
+        latitude: Number(data.latitude),
+        longitude: Number(data.longitude),
+        timestamp: data.timestamp,
+        user: data.user || null,
+      });
+    });
+
+    res.json({
+      success: true,
+      days,
+      count: observations.length,
+      data: observations,
+    });
+  } catch (error) {
+    console.error('GET /api/observations/recent-map error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch recent map sightings',
+    });
+  }
+});
+
+// Apply API key validation to remaining routes
 router.use(validateApiKey);
 
 // GET /api/observations - Fetch observations for map display (READ-ONLY with location data only)
@@ -429,78 +575,6 @@ router.post('/', upload.single('image'), async (req, res) => {
       success: false,
       error: 'Failed to create observation',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
-
-// Animals that must never appear on the public field-map "recent sightings" layer.
-const RECENT_MAP_EXCLUDED_ANIMALS = ['pangolin', 'rhino'];
-
-function isExcludedFromRecentMap(animal) {
-  const a = String(animal || '').toLowerCase().trim();
-  if (!a) return false;
-  return RECENT_MAP_EXCLUDED_ANIMALS.some(
-    (blocked) => a === blocked || a.includes(blocked)
-  );
-}
-
-/**
- * GET /api/observations/recent-map
- * Sightings from the past 3 days for the field PWA map.
- * Never returns Pangolin or Rhino (or any animal name containing those words).
- * Returns only map-safe fields (no images / incident extras).
- */
-router.get('/recent-map', async (req, res) => {
-  try {
-    if (!db) {
-      return res.status(503).json({
-        success: false,
-        error: 'Database not available',
-      });
-    }
-
-    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 3, 1), 7);
-    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-
-    const snapshot = await db
-      .collection('observations')
-      .orderBy('timestamp', 'desc')
-      .get();
-
-    const observations = [];
-    snapshot.forEach((doc) => {
-      const data = doc.data() || {};
-      if (String(data.category || '').toLowerCase() !== 'sighting') return;
-      if (data.latitude === undefined || data.longitude === undefined) return;
-      if (isExcludedFromRecentMap(data.animal)) return;
-
-      const ts = data.timestamp ? new Date(data.timestamp) : null;
-      if (!ts || Number.isNaN(ts.getTime()) || ts < cutoff) return;
-
-      observations.push({
-        id: doc.id,
-        category: 'Sighting',
-        animal: data.animal,
-        activity: data.activity || null,
-        age: data.age || null,
-        latitude: Number(data.latitude),
-        longitude: Number(data.longitude),
-        timestamp: data.timestamp,
-        user: data.user || null,
-      });
-    });
-
-    res.json({
-      success: true,
-      days,
-      count: observations.length,
-      data: observations,
-    });
-  } catch (error) {
-    console.error('GET /api/observations/recent-map error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch recent map sightings',
     });
   }
 });

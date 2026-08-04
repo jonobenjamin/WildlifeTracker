@@ -17,6 +17,7 @@ class AuthController {
       // running (started by flutter_bootstrap.js).
       this._hideOverlay();
       this.flutterStarted = true;
+      this._refreshRoleInBackground();
       return;
     }
 
@@ -60,6 +61,25 @@ class AuthController {
   _hideOverlay() {
     const overlay = document.getElementById('auth-overlay');
     if (overlay) overlay.style.display = 'none';
+  }
+
+  // Best-effort role refresh so map gates (recent sightings) stay accurate.
+  _refreshRoleInBackground() {
+    if (!navigator.onLine) return;
+    (async () => {
+      try {
+        const ready = await this._waitForServices(8000);
+        if (!ready || !window.authService) return;
+        const user = window.firebaseAuth?.auth?.currentUser;
+        if (!user) return;
+        await window.authService.persistAuthenticatedRole(
+          user.uid,
+          localStorage.getItem('authenticatedUserName')
+        );
+      } catch (e) {
+        console.warn('AuthController: role refresh skipped', e);
+      }
+    })();
   }
 
   // Returns true if Firebase services become available within `timeoutMs`.

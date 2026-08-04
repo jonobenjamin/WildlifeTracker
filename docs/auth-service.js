@@ -134,6 +134,9 @@ class AuthService {
         // Don't throw here - continue with authentication even if user doc fails
       }
 
+      // Persist role for the Flutter map (admin/user can see recent sightings; viewers cannot)
+      await this.persistAuthenticatedRole(result.user.uid, data.name);
+
       // Store authentication state for offline use
       console.log('DEBUG: Setting localStorage - userAuthenticated=true, authenticatedUserName=', data.name);
       localStorage.setItem('userAuthenticated', 'true');
@@ -236,6 +239,8 @@ class AuthService {
         await this.createOrUpdateUser(result.user, pendingUserData);
         sessionStorage.removeItem('pendingPhoneUser');
 
+        await this.persistAuthenticatedRole(result.user.uid, pendingUserData.name);
+
         // Store authentication state for offline use
         console.log('DEBUG: Setting localStorage for phone auth - userAuthenticated=true, authenticatedUserName=', pendingUserData.name);
         localStorage.setItem('userAuthenticated', 'true');
@@ -276,11 +281,22 @@ class AuthService {
       name: userData.name,
       email: userData.email,
       phone: userData.phone || null,
-      role: 'user',
       status: 'active',
       registeredAt: userData.registeredAt || serverTimestamp(),
       lastLogin: serverTimestamp()
     };
+
+    // Preserve existing role (admin/viewer); only default new accounts to user
+    try {
+      const existing = await getDoc(doc(this.db, 'users', user.uid));
+      if (existing.exists && existing.data()?.role) {
+        userDoc.role = existing.data().role;
+      } else {
+        userDoc.role = userData.role || 'user';
+      }
+    } catch (_) {
+      userDoc.role = userData.role || 'user';
+    }
 
     console.log('🔥 User document data to write:', userDoc);
 
@@ -413,6 +429,24 @@ class AuthService {
     }
   }
 
+  // Persist role for Flutter map gates (admin/user see recent sightings; viewers do not)
+  async persistAuthenticatedRole(uid, fallbackName) {
+    let role = 'user';
+    try {
+      if (this.db && uid) {
+        const snap = await getDoc(doc(this.db, 'users', uid));
+        if (snap.exists() && snap.data()?.role) {
+          role = String(snap.data().role).toLowerCase();
+        }
+      }
+    } catch (e) {
+      console.warn('Could not read user role; defaulting to user:', e.message);
+    }
+    localStorage.setItem('authenticatedUserRole', role);
+    console.log('Stored authenticatedUserRole=', role, 'for', fallbackName || uid);
+    return role;
+  }
+
   // Check if user is allowed to submit data (not revoked)
   async canSubmitData() {
     const userStatus = await this.checkUserStatus();
@@ -437,6 +471,7 @@ class AuthService {
     // Clear offline authentication state
     localStorage.removeItem('userAuthenticated');
     localStorage.removeItem('authenticatedUserName');
+    localStorage.removeItem('authenticatedUserRole');
   }
 
   isAuthenticated() {
