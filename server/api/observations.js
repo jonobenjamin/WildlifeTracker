@@ -3,6 +3,7 @@ const multer = require('multer');
 const admin = require('firebase-admin');
 const { getStorage } = require('firebase-admin/storage');
 const { sendObservationNotification } = require('../services/notificationServices');
+const { createFieldAuth } = require('../middleware/fieldAuth');
 
 const router = express.Router();
 
@@ -90,19 +91,8 @@ const upload = multer({
 
 module.exports = (db) => {
 
-// Middleware to validate API key (simple authentication)
-const validateApiKey = (req, res, next) => {
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-
-  if (!apiKey || apiKey !== process.env.API_KEY) {
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Valid API key required'
-    });
-  }
-
-  next();
-};
+// Accept shared API key OR signed-in Firebase session (field PWA).
+const validateApiKey = createFieldAuth(db);
 
 // Animals that must never appear on the public field-map "recent sightings" layer.
 const RECENT_MAP_EXCLUDED_ANIMALS = ['pangolin', 'rhino'];

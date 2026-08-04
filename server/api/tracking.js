@@ -1,4 +1,5 @@
 const express = require('express');
+const { createFieldAuth } = require('../middleware/fieldAuth');
 const router = express.Router();
 
 // Check if user is revoked (reuse pattern from observations)
@@ -31,13 +32,7 @@ async function checkUserRevoked(db, userIdentifier) {
 }
 
 module.exports = (db) => {
-  const validateApiKey = (req, res, next) => {
-    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-    if (!apiKey || apiKey !== process.env.API_KEY) {
-      return res.status(401).json({ error: 'Unauthorized', message: 'Valid API key required' });
-    }
-    next();
-  };
+  const validateApiKey = createFieldAuth(db);
 
   router.use(validateApiKey);
 
