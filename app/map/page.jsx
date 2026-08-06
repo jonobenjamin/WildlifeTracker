@@ -11,6 +11,7 @@ import WaterExtentSlider from '@/components/WaterExtentSlider';
 import { useAuth, useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
 import { divIcon, dotIcon, recentPinIcon, colorForLabel, ensureHeatPlugin, fetchGeoJson } from '@/lib/mapIcons';
+import { buildTrackLayer, trackColor, trackLabel } from '@/lib/trackLayers';
 import { attachWeatherPopup } from '@/lib/weather';
 
 const LEGEND_ITEMS = [
@@ -67,6 +68,7 @@ export default function ConcessionMapPage() {
 
   const [allObservations, setAllObservations] = useState([]);
   const [allTrees, setAllTrees] = useState([]);
+  const [allTracking, setAllTracking] = useState([]);
 
   const [viewMode, setViewMode] = useState('sightings');
   const [dateStart, setDateStart] = useState('');
@@ -78,6 +80,8 @@ export default function ConcessionMapPage() {
   const [displayMode, setDisplayMode] = useState('actual');
   const [showRecent, setShowRecent] = useState(false);
   const [total, setTotal] = useState(0);
+  const [focusTarget, setFocusTarget] = useState(null);
+  const focusAppliedRef = useRef(false);
 
   const [waterLocation, setWaterLocation] = useState('');
   const [waterForm, setWaterForm] = useState({});
@@ -106,6 +110,35 @@ export default function ConcessionMapPage() {
     });
     return Array.from(set).sort();
   }, [allTrees]);
+
+  const trackLegend = useMemo(() => {
+    if (viewMode !== 'vehicle' && viewMode !== 'patrol') return [];
+    const filters = { dateStart, dateEnd, month, year };
+    const seen = new Map();
+    allTracking
+      .filter((t) => (t.trackingType || '').toLowerCase() === viewMode)
+      .filter((t) => withinDateFilters(t.startTime || t.timestamp, filters))
+      .forEach((t) => {
+        const label = trackLabel(t);
+        if (!seen.has(label)) seen.set(label, trackColor(t));
+      });
+    return Array.from(seen.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [allTracking, viewMode, dateStart, dateEnd, month, year]);
+
+  // Deep-link from reports: /map?view=sightings&id=…&lat=…&lng=…
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const view = params.get('view');
+    const allowed = ['sightings', 'trees', 'maintenance', 'incidents', 'vehicle', 'patrol', 'water-quality', 'water-monitoring', 'fires'];
+    if (view && allowed.includes(view)) setViewMode(view);
+    const lat = parseFloat(params.get('lat'));
+    const lng = parseFloat(params.get('lng'));
+    const id = params.get('id');
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      setFocusTarget({ lat, lng, id });
+    }
+  }, []);
 
   const applyBaseVisibility = useCallback(() => {
     const { map, baseLayers } = mapObj.current;
@@ -167,13 +200,15 @@ export default function ConcessionMapPage() {
 
       applyBaseVisibility();
 
-      const [treesRes, obsRes] = await Promise.all([
+      const [treesRes, obsRes, trackRes] = await Promise.all([
         apiFetch('/api/trees').catch(() => ({ data: [] })),
         apiFetch('/api/observations').catch(() => ({ data: [] })),
+        apiFetch('/api/tracking').catch(() => ({ data: [] })),
       ]);
 
       setAllTrees(treesRes.data || []);
       setAllObservations(obsRes.data || []);
+      setAllTracking(trackRes.data || []);
       setLoading(false);
     } catch (e) {
       setError(e.message);
@@ -317,13 +352,49 @@ export default function ConcessionMapPage() {
           });
         mapObj.current.fireLayer = L.layerGroup(markers).addTo(map);
         setTotal(filtered.length);
+      } else if (viewMode === 'vehicle' || viewMode === 'patrol') {
+        const filtered = allTracking.filter((t) => {
+          if ((t.trackingType || '').toLowerCase() !== viewMode) return false;
+          return withinDateFilters(t.startTime || t.timestamp, filters);
+        });
+        const { layer, bounds, count } = buildTrackLayer(L, filtered);
+        mapObj.current.activeLayer = layer.addTo(map);
+        setTotal(count);
+        if (bounds) {
+          try {
+            map.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 });
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+
+      // Focus a marker opened from the reports list (once)
+      if (
+        focusTarget &&
+        !focusAppliedRef.current &&
+        (viewMode === 'sightings' || viewMode === 'maintenance' || viewMode === 'incidents') &&
+        allObservations.length > 0
+      ) {
+        focusAppliedRef.current = true;
+        map.setView([focusTarget.lat, focusTarget.lng], Math.max(map.getZoom(), 15));
+        const layer = mapObj.current.activeLayer;
+        if (layer && typeof layer.eachLayer === 'function') {
+          layer.eachLayer((m) => {
+            const ll = m.getLatLng?.();
+            if (!ll) return;
+            if (Math.abs(ll.lat - focusTarget.lat) < 0.00015 && Math.abs(ll.lng - focusTarget.lng) < 0.00015) {
+              m.openPopup?.();
+            }
+          });
+        }
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [viewMode, dateStart, dateEnd, month, year, species, treeType, displayMode, showRecent, allObservations, allTrees, fires, fireSensor]);
+  }, [viewMode, dateStart, dateEnd, month, year, species, treeType, displayMode, showRecent, allObservations, allTrees, allTracking, fires, fireSensor, focusTarget]);
 
   const loadFires = useCallback(async () => {
     setFiresLoading(true);
@@ -397,9 +468,14 @@ export default function ConcessionMapPage() {
 
   if (!authorized) return null;
 
-  const totalLabel = { sightings: 'Total Sightings', trees: 'Total Trees', maintenance: 'Total Maintenance', incidents: 'Total Incidents' }[
-    viewMode
-  ];
+  const totalLabel = {
+    sightings: 'Total Sightings',
+    trees: 'Total Trees',
+    maintenance: 'Total Maintenance',
+    incidents: 'Total Incidents',
+    vehicle: 'Vehicle tracks',
+    patrol: 'Patrol tracks',
+  }[viewMode];
 
   return (
     <AppShell title="Concession Map">
@@ -455,6 +531,7 @@ export default function ConcessionMapPage() {
           fireCount={fires.filter((f) => !fireSensor || f.properties?.sensor === fireSensor).length}
           onRefreshFires={loadFires}
           firesLoading={firesLoading}
+          trackLegend={trackLegend}
         />
       </div>
 
