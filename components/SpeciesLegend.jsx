@@ -4,7 +4,7 @@ import { useState } from 'react';
 
 /** Dynamic colour key for species currently visible on the concession map. */
 export default function SpeciesLegend({ items }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
 
   if (!items?.length) return null;
 
@@ -16,7 +16,10 @@ export default function SpeciesLegend({ items }) {
         onClick={() => setOpen((v) => !v)}
       >
         <span>Species</span>
-        <span className="text-portal-text-muted text-xs font-normal">{items.length}</span>
+        <span className="text-portal-text-muted text-xs font-normal flex items-center gap-1.5">
+          {items.length}
+          <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+        </span>
       </button>
       {open && (
         <div className="px-3.5 pb-3.5 space-y-1.5 border-t border-portal-border pt-2.5 max-h-64 overflow-y-auto">

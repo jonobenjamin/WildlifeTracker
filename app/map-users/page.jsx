@@ -6,7 +6,7 @@ import AppShell from '@/components/AppShell';
 import LeafletMap from '@/components/LeafletMap';
 import { useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
-import { divIcon, fetchGeoJson } from '@/lib/mapIcons';
+import { divIcon, fetchGeoJson, lodgeIcon } from '@/lib/mapIcons';
 
 export default function WildlifeMapPage() {
   const { authorized } = useRequireRole(['admin', 'user', 'viewer']);
@@ -29,7 +29,7 @@ export default function WildlifeMapPage() {
       map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20] });
 
       L.geoJSON(camps, {
-        pointToLayer: (feature, latlng) => L.marker(latlng, { icon: divIcon(L, 'camp') }),
+        pointToLayer: (feature, latlng) => L.marker(latlng, { icon: lodgeIcon(L) }),
         onEachFeature: (feature, layer) => {
           const name = feature.properties?.Camps || feature.properties?.name || 'Camp';
           layer.bindPopup(`<strong>${escapeHtml(name)}</strong>`);

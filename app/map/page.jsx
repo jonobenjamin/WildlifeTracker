@@ -12,7 +12,7 @@ import WaterExtentSlider from '@/components/WaterExtentSlider';
 import LatestWaterOverlay from '@/components/LatestWaterOverlay';
 import { useAuth, useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
-import { divIcon, dotIcon, recentPinIcon, colorForLabel, ensureHeatPlugin, fetchGeoJson } from '@/lib/mapIcons';
+import { divIcon, dotIcon, recentPinIcon, colorForLabel, ensureHeatPlugin, fetchGeoJson, lodgeIcon } from '@/lib/mapIcons';
 import { buildTrackLayer, trackColor, trackLabel } from '@/lib/trackLayers';
 import { attachWeatherPopup } from '@/lib/weather';
 
@@ -65,7 +65,7 @@ export default function ConcessionMapPage() {
   // WaterExtentSlider (which needs map + L) would never mount without this.
   const [mapReady, setMapReady] = useState({ map: null, L: null });
 
-  const [toggles, setToggles] = useState({ roads: false, camps: true, poi: false, water: false });
+  const [toggles, setToggles] = useState({ roads: true, camps: true, poi: false, water: false });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -192,14 +192,13 @@ export default function ConcessionMapPage() {
       const boundaryLayer = L.geoJSON(boundary, {
         style: { color: '#4c1918', weight: 2.5, fillOpacity: 0.03 },
       }).addTo(map);
-      map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20] });
 
       mapObj.current.baseLayers.roads = L.geoJSON(roads, {
         style: { color: '#8a6d3b', weight: 1.5, opacity: 0.8 },
       });
 
       mapObj.current.baseLayers.camps = L.geoJSON(camps, {
-        pointToLayer: (feature, latlng) => L.marker(latlng, { icon: divIcon(L, 'camp') }),
+        pointToLayer: (feature, latlng) => L.marker(latlng, { icon: lodgeIcon(L) }),
         onEachFeature: (feature, layer) => {
           const name = feature.properties?.Camps || feature.properties?.name || 'Camp';
           const baseHtml = `<strong>${escapeHtml(name)}</strong>`;
@@ -208,6 +207,23 @@ export default function ConcessionMapPage() {
           attachWeatherPopup(layer, latlng.lat, latlng.lng, baseHtml);
         },
       });
+
+      // Initial view: frame Tau Camp → Little Sable Camp (west–east span of main lodges)
+      const initialCamps = (camps.features || []).filter((f) => {
+        const name = String(f.properties?.Camps || f.properties?.name || '').toLowerCase();
+        return name === 'tau camp' || name === 'little sable camp';
+      });
+      if (initialCamps.length >= 2) {
+        const bounds = L.latLngBounds(
+          initialCamps.map((f) => {
+            const [lng, lat] = f.geometry.coordinates;
+            return [lat, lng];
+          })
+        );
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 13 });
+      } else {
+        map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20] });
+      }
 
       if (poi) {
         mapObj.current.baseLayers.poi = L.geoJSON(poi, {
