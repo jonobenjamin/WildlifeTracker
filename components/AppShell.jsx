@@ -85,7 +85,7 @@ export default function AppShell({ title, children, sidebarBottom = null }) {
         <header
           className="flex items-center justify-between px-6 py-4 shadow-portal border-b-[3px]"
           style={{
-            background: 'linear-gradient(135deg, var(--kpr-green) 0%, var(--kpr-burgundy) 100%)',
+            background: 'linear-gradient(135deg, var(--kpr-burgundy) 0%, var(--kpr-green) 100%)',
             borderBottomColor: 'var(--kpr-gold)',
           }}
         >
