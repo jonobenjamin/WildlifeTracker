@@ -89,13 +89,11 @@ export default function MapFilterPanel({
   fireCount,
   onRefreshFires,
   firesLoading,
-  trackLegend = [],
 }) {
   const showDateFilters = !['trees', 'water-quality', 'water-monitoring', 'fires'].includes(viewMode);
-  const showDisplayModeSwitch = viewMode === 'sightings' || viewMode === 'trees';
+  const showDisplayModeSwitch = viewMode === 'sightings' || viewMode === 'trees' || viewMode === 'vehicle';
   const showRecentToggle = ['sightings', 'maintenance', 'incidents'].includes(viewMode);
   const showStat = ['sightings', 'trees', 'maintenance', 'incidents', 'vehicle', 'patrol'].includes(viewMode);
-  const showTrackLegend = (viewMode === 'vehicle' || viewMode === 'patrol') && trackLegend.length > 0;
 
   return (
     <div
@@ -198,25 +196,11 @@ export default function MapFilterPanel({
         </div>
       )}
 
-      {showTrackLegend && (
-        <div>
-          <h4 className="kpr-label">{viewMode === 'vehicle' ? 'Vehicle colours' : 'Patrol colours'}</h4>
-          <div className="space-y-1.5 max-h-40 overflow-y-auto">
-            {trackLegend.map(([label, color]) => (
-              <div key={label} className="flex items-center gap-2 text-xs">
-                <span className="inline-block w-3 h-3 rounded-full flex-shrink-0" style={{ background: color }} />
-                <span className="truncate">{label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {(viewMode === 'vehicle' || viewMode === 'patrol') && (
         <p className="text-xs text-portal-text-muted leading-relaxed">
           {viewMode === 'vehicle'
-            ? 'Shows recorded vehicle track lines. Each vehicle number has its own colour.'
-            : 'Shows recorded patrol track lines coloured by walker.'}
+            ? 'Shows recorded vehicle trips as coloured track lines, or as a heat map of GPS points (Hotspots).'
+            : 'Shows recorded patrol trips as coloured track lines. Open the map legend for walker colours.'}
         </p>
       )}
 

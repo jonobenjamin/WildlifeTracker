@@ -2,8 +2,11 @@
 
 import { useState } from 'react';
 
-/** Dynamic colour key for species currently visible on the concession map. */
-export default function SpeciesLegend({ items }) {
+/**
+ * Collapsible colour key for map markers/lines.
+ * Defaults minimized; shows only entries currently visible for active filters.
+ */
+export default function DynamicMapLegend({ title = 'Legend', items }) {
   const [open, setOpen] = useState(false);
 
   if (!items?.length) return null;
@@ -15,7 +18,7 @@ export default function SpeciesLegend({ items }) {
         className="w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-semibold"
         onClick={() => setOpen((v) => !v)}
       >
-        <span>Species</span>
+        <span>{title}</span>
         <span className="text-portal-text-muted text-xs font-normal flex items-center gap-1.5">
           {items.length}
           <span aria-hidden="true">{open ? '▾' : '▸'}</span>

@@ -5,7 +5,7 @@ import dayjs from 'dayjs';
 import AppShell from '@/components/AppShell';
 import LeafletMap from '@/components/LeafletMap';
 import MapLegend from '@/components/MapLegend';
-import SpeciesLegend from '@/components/SpeciesLegend';
+import DynamicMapLegend from '@/components/DynamicMapLegend';
 import MapFilterPanel from '@/components/MapFilterPanel';
 import WaterTrendsModal from '@/components/WaterTrendsModal';
 import WaterExtentSlider from '@/components/WaterExtentSlider';
@@ -13,8 +13,12 @@ import LatestWaterOverlay from '@/components/LatestWaterOverlay';
 import { useAuth, useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
 import { divIcon, dotIcon, recentPinIcon, colorForLabel, ensureHeatPlugin, fetchGeoJson, lodgeIcon } from '@/lib/mapIcons';
-import { buildTrackLayer, trackColor, trackLabel } from '@/lib/trackLayers';
+import { buildTrackLayer, trackColor, trackLabel, trackVerticesAsHeatPoints } from '@/lib/trackLayers';
+import { addHomeZoomControl } from '@/lib/homeZoomControl';
 import { attachWeatherPopup } from '@/lib/weather';
+
+const HOME_CAMPS = ['tau camp', 'little sable camp'];
+const HOME_FIT = { padding: [60, 60], maxZoom: 13 };
 
 const LEGEND_ITEMS = [
   { key: 'roads', label: 'Roads', emoji: '🛣️' },
@@ -60,7 +64,17 @@ function escapeHtml(str) {
 export default function ConcessionMapPage() {
   const { authorized } = useRequireRole(['admin']);
   const { user } = useAuth();
-  const mapObj = useRef({ map: null, L: null, baseLayers: {}, activeLayer: null, recentLayer: null, waterMarkers: [], fireLayer: null });
+  const mapObj = useRef({
+    map: null,
+    L: null,
+    baseLayers: {},
+    activeLayer: null,
+    recentLayer: null,
+    waterMarkers: [],
+    fireLayer: null,
+    homeBounds: null,
+    homeControl: null,
+  });
   // React state mirror of the Leaflet map — refs alone don't re-render, so the
   // WaterExtentSlider (which needs map + L) would never mount without this.
   const [mapReady, setMapReady] = useState({ map: null, L: null });
@@ -117,15 +131,19 @@ export default function ConcessionMapPage() {
   const trackLegend = useMemo(() => {
     if (viewMode !== 'vehicle' && viewMode !== 'patrol') return [];
     const filters = { dateStart, dateEnd, month, year };
-    const seen = new Map();
+    const counts = new Map();
+    const colors = new Map();
     allTracking
       .filter((t) => (t.trackingType || '').toLowerCase() === viewMode)
       .filter((t) => withinDateFilters(t.startTime || t.timestamp, filters))
       .forEach((t) => {
         const label = trackLabel(t);
-        if (!seen.has(label)) seen.set(label, trackColor(t));
+        counts.set(label, (counts.get(label) || 0) + 1);
+        if (!colors.has(label)) colors.set(label, trackColor(t));
       });
-    return Array.from(seen.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    return Array.from(counts.entries())
+      .map(([label, count]) => ({ label, count, color: colors.get(label) }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   }, [allTracking, viewMode, dateStart, dateEnd, month, year]);
 
   // Species currently plotted on the map (respects the same filters as markers).
@@ -145,6 +163,21 @@ export default function ConcessionMapPage() {
       .map(([label, count]) => ({ label, count, color: colorForLabel(label) }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
   }, [viewMode, allObservations, dateStart, dateEnd, month, year, species]);
+
+  // Tree species currently plotted (respects tree type filter).
+  const visibleTreesLegend = useMemo(() => {
+    if (viewMode !== 'trees') return [];
+    const counts = new Map();
+    allTrees.forEach((t) => {
+      if (t.latitude == null || t.longitude == null) return;
+      if (treeType && (t.species || '').toLowerCase() !== treeType.toLowerCase()) return;
+      const label = t.species || 'Unknown';
+      counts.set(label, (counts.get(label) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([label, count]) => ({ label, count, color: colorForLabel(label) }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [viewMode, allTrees, treeType]);
 
   // Deep-link from reports: /map?view=sightings&id=…&lat=…&lng=…
   useEffect(() => {
@@ -211,18 +244,26 @@ export default function ConcessionMapPage() {
       // Initial view: frame Tau Camp → Little Sable Camp (west–east span of main lodges)
       const initialCamps = (camps.features || []).filter((f) => {
         const name = String(f.properties?.Camps || f.properties?.name || '').toLowerCase();
-        return name === 'tau camp' || name === 'little sable camp';
+        return HOME_CAMPS.includes(name);
       });
       if (initialCamps.length >= 2) {
-        const bounds = L.latLngBounds(
+        mapObj.current.homeBounds = L.latLngBounds(
           initialCamps.map((f) => {
             const [lng, lat] = f.geometry.coordinates;
             return [lat, lng];
           })
         );
-        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 13 });
+        map.fitBounds(mapObj.current.homeBounds, HOME_FIT);
       } else {
-        map.fitBounds(boundaryLayer.getBounds(), { padding: [20, 20] });
+        mapObj.current.homeBounds = boundaryLayer.getBounds();
+        map.fitBounds(mapObj.current.homeBounds, { padding: [20, 20] });
+      }
+
+      if (!mapObj.current.homeControl) {
+        mapObj.current.homeControl = addHomeZoomControl(L, map, () => {
+          const bounds = mapObj.current.homeBounds;
+          if (bounds) map.fitBounds(bounds, HOME_FIT);
+        });
       }
 
       if (poi) {
@@ -394,14 +435,34 @@ export default function ConcessionMapPage() {
           if ((t.trackingType || '').toLowerCase() !== viewMode) return false;
           return withinDateFilters(t.startTime || t.timestamp, filters);
         });
-        const { layer, bounds, count } = buildTrackLayer(L, filtered);
-        mapObj.current.activeLayer = layer.addTo(map);
-        setTotal(count);
-        if (bounds) {
-          try {
-            map.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 });
-          } catch {
-            /* ignore */
+        setTotal(filtered.length);
+
+        if (viewMode === 'vehicle' && displayMode === 'hotspot') {
+          await ensureHeatPlugin(L);
+          if (cancelled) return;
+          const points = trackVerticesAsHeatPoints(filtered);
+          if (points.length > 0) {
+            mapObj.current.activeLayer = L.heatLayer(points, {
+              radius: 22,
+              blur: 16,
+              maxZoom: 17,
+              minOpacity: 0.45,
+            }).addTo(map);
+            try {
+              map.fitBounds(points.map(([lat, lng]) => [lat, lng]), { padding: [24, 24], maxZoom: 15 });
+            } catch {
+              /* ignore */
+            }
+          }
+        } else {
+          const { layer, bounds } = buildTrackLayer(L, filtered);
+          mapObj.current.activeLayer = layer.addTo(map);
+          if (bounds) {
+            try {
+              map.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 });
+            } catch {
+              /* ignore */
+            }
           }
         }
       }
@@ -510,8 +571,8 @@ export default function ConcessionMapPage() {
     trees: 'Total Trees',
     maintenance: 'Total Maintenance',
     incidents: 'Total Incidents',
-    vehicle: 'Vehicle tracks',
-    patrol: 'Patrol tracks',
+    vehicle: 'Vehicle trips',
+    patrol: 'Patrol trips',
   }[viewMode];
 
   return (
@@ -529,7 +590,12 @@ export default function ConcessionMapPage() {
       <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-160px)]">
         <div className="relative flex-1 min-w-0 rounded-portal-lg overflow-hidden border border-portal-border">
           <LeafletMap onReady={handleReady} />
-          {viewMode === 'sightings' && <SpeciesLegend items={visibleSpeciesLegend} />}
+          {viewMode === 'sightings' && <DynamicMapLegend title="Species" items={visibleSpeciesLegend} />}
+          {viewMode === 'trees' && <DynamicMapLegend title="Trees" items={visibleTreesLegend} />}
+          {viewMode === 'vehicle' && displayMode !== 'hotspot' && (
+            <DynamicMapLegend title="Vehicles" items={trackLegend} />
+          )}
+          {viewMode === 'patrol' && <DynamicMapLegend title="Patrol" items={trackLegend} />}
           {loading && (
             <div className="absolute bottom-3 left-3 z-[500] kpr-card px-3.5 py-2 text-xs text-portal-text-muted">Loading layers…</div>
           )}
@@ -581,7 +647,6 @@ export default function ConcessionMapPage() {
           fireCount={fires.filter((f) => !fireSensor || f.properties?.sensor === fireSensor).length}
           onRefreshFires={loadFires}
           firesLoading={firesLoading}
-          trackLegend={trackLegend}
         />
       </div>
 
