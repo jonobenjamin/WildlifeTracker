@@ -26,7 +26,7 @@ function initialsFromLabel(label) {
   return local.length === 1 ? (local + local).toUpperCase() : local.slice(0, 2).toUpperCase();
 }
 
-export default function AppShell({ title, children }) {
+export default function AppShell({ title, children, sidebarBottom = null }) {
   const pathname = usePathname();
   const { user, profile, role, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -51,7 +51,7 @@ export default function AppShell({ title, children }) {
           <Image src="/data/icons/KPR.svg" alt="KPR" width={30} height={30} />
           <span className="text-sm font-bold tracking-wide text-white">KPR</span>
         </div>
-        <nav className="flex-1 flex flex-col gap-1 px-2">
+        <nav className="flex-1 flex flex-col gap-1 px-2 overflow-y-auto">
           {items.map((item) => {
             const active = pathname === item.href;
             return (
@@ -67,15 +67,18 @@ export default function AppShell({ title, children }) {
             );
           })}
         </nav>
-        <a
-          href="https://kpr-sightings.okavangowater.com"
-          target="_blank"
-          rel="noreferrer"
-          className="mx-2 mb-4 mt-auto border-t border-white/10 px-3 pt-3.5 text-xs font-semibold"
-          style={{ color: 'var(--kpr-gold)' }}
-        >
-          Open field PWA ↗
-        </a>
+        <div className="mt-auto">
+          {sidebarBottom}
+          <a
+            href="https://kpr-sightings.okavangowater.com"
+            target="_blank"
+            rel="noreferrer"
+            className="mx-2 mb-4 block border-t border-white/10 px-3 pt-3.5 text-xs font-semibold"
+            style={{ color: 'var(--kpr-gold)' }}
+          >
+            Open field PWA ↗
+          </a>
+        </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">

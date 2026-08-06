@@ -260,7 +260,7 @@ export default function MapFilterPanel({
 
       {viewMode === 'water-monitoring' && (
         <p className="text-xs text-portal-text-muted leading-relaxed">
-          Use the slider below the map to scrub through historical Okavango Delta water extent imagery.
+          Use the slider below the map to scrub through historical Okavango Delta water extent imagery. For only the latest image on any view, toggle Water in the left ribbon legend.
         </p>
       )}
 

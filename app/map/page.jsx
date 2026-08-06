@@ -5,9 +5,11 @@ import dayjs from 'dayjs';
 import AppShell from '@/components/AppShell';
 import LeafletMap from '@/components/LeafletMap';
 import MapLegend from '@/components/MapLegend';
+import SpeciesLegend from '@/components/SpeciesLegend';
 import MapFilterPanel from '@/components/MapFilterPanel';
 import WaterTrendsModal from '@/components/WaterTrendsModal';
 import WaterExtentSlider from '@/components/WaterExtentSlider';
+import LatestWaterOverlay from '@/components/LatestWaterOverlay';
 import { useAuth, useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
 import { divIcon, dotIcon, recentPinIcon, colorForLabel, ensureHeatPlugin, fetchGeoJson } from '@/lib/mapIcons';
@@ -18,6 +20,7 @@ const LEGEND_ITEMS = [
   { key: 'roads', label: 'Roads', emoji: '🛣️' },
   { key: 'camps', label: 'Camps', emoji: '🏕️' },
   { key: 'poi', label: 'Points of interest', emoji: '📍' },
+  { key: 'water', label: 'Water (latest)', emoji: '💧' },
 ];
 
 const WATER_LOCATIONS = {
@@ -62,7 +65,7 @@ export default function ConcessionMapPage() {
   // WaterExtentSlider (which needs map + L) would never mount without this.
   const [mapReady, setMapReady] = useState({ map: null, L: null });
 
-  const [toggles, setToggles] = useState({ roads: false, camps: true, poi: false });
+  const [toggles, setToggles] = useState({ roads: false, camps: true, poi: false, water: false });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -124,6 +127,24 @@ export default function ConcessionMapPage() {
       });
     return Array.from(seen.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [allTracking, viewMode, dateStart, dateEnd, month, year]);
+
+  // Species currently plotted on the map (respects the same filters as markers).
+  const visibleSpeciesLegend = useMemo(() => {
+    if (viewMode !== 'sightings') return [];
+    const filters = { dateStart, dateEnd, month, year };
+    const counts = new Map();
+    allObservations.forEach((o) => {
+      if ((o.category || '').toLowerCase() !== 'sighting') return;
+      if (o.latitude == null || o.longitude == null) return;
+      if (!withinDateFilters(o.timestamp, filters)) return;
+      if (species && (o.animal || '').toLowerCase() !== species.toLowerCase()) return;
+      const label = o.animal || 'Unknown';
+      counts.set(label, (counts.get(label) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([label, count]) => ({ label, count, color: colorForLabel(label) }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [viewMode, allObservations, dateStart, dateEnd, month, year, species]);
 
   // Deep-link from reports: /map?view=sightings&id=…&lat=…&lng=…
   useEffect(() => {
@@ -478,17 +499,30 @@ export default function ConcessionMapPage() {
   }[viewMode];
 
   return (
-    <AppShell title="Concession Map">
+    <AppShell
+      title="Concession Map"
+      sidebarBottom={
+        <MapLegend
+          variant="sidebar"
+          title="Map layers"
+          items={LEGEND_ITEMS.map((i) => ({ ...i, checked: toggles[i.key] }))}
+          onToggle={(k) => setToggles((t) => ({ ...t, [k]: !t[k] }))}
+        />
+      }
+    >
       <div className="flex flex-col lg:flex-row gap-4 h-[calc(100vh-160px)]">
         <div className="relative flex-1 min-w-0 rounded-portal-lg overflow-hidden border border-portal-border">
           <LeafletMap onReady={handleReady} />
-          <MapLegend items={LEGEND_ITEMS.map((i) => ({ ...i, checked: toggles[i.key] }))} onToggle={(k) => setToggles((t) => ({ ...t, [k]: !t[k] }))} />
+          {viewMode === 'sightings' && <SpeciesLegend items={visibleSpeciesLegend} />}
           {loading && (
             <div className="absolute bottom-3 left-3 z-[500] kpr-card px-3.5 py-2 text-xs text-portal-text-muted">Loading layers…</div>
           )}
           {error && <div className="absolute bottom-3 left-3 z-[500] kpr-card px-3.5 py-2 text-xs text-portal-danger">{error}</div>}
           {viewMode === 'fires' && firesError && (
             <div className="absolute bottom-3 left-3 z-[500] kpr-card px-3.5 py-2 text-xs text-portal-danger">{firesError}</div>
+          )}
+          {mapReady.map && mapReady.L && toggles.water && viewMode !== 'water-monitoring' && (
+            <LatestWaterOverlay map={mapReady.map} L={mapReady.L} enabled />
           )}
           {viewMode === 'water-monitoring' && mapReady.map && mapReady.L && (
             <WaterExtentSlider map={mapReady.map} L={mapReady.L} />
