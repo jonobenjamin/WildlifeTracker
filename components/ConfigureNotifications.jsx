@@ -10,6 +10,7 @@ import {
 import {
   listNotificationRules,
   createNotificationRule,
+  updateNotificationRule,
   deleteNotificationRule,
   setNotificationRuleEnabled,
   getResendStatus,
@@ -36,6 +37,7 @@ export default function ConfigureNotifications({ users = [] }) {
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [allItems, setAllItems] = useState(false);
+  const [editingRuleId, setEditingRuleId] = useState(null);
   const [testUserId, setTestUserId] = useState('');
   const [replayId, setReplayId] = useState('');
   const [replayAnimal, setReplayAnimal] = useState('Lion');
@@ -76,9 +78,10 @@ export default function ConfigureNotifications({ users = [] }) {
   }, []);
 
   useEffect(() => {
+    if (editingRuleId) return;
     setSelectedItems([]);
     setAllItems(false);
-  }, [category]);
+  }, [category, editingRuleId]);
 
   function toggleItem(item) {
     setAllItems(false);
@@ -93,21 +96,48 @@ export default function ConfigureNotifications({ users = [] }) {
     );
   }
 
+  function resetForm() {
+    setEditingRuleId(null);
+    setCategory('sighting');
+    setSelectedItems([]);
+    setSelectedUsers([]);
+    setAllItems(false);
+    setError(null);
+  }
+
+  function startEdit(rule) {
+    setError(null);
+    setEditingRuleId(rule.id);
+    setCategory(rule.category || 'sighting');
+    const items = Array.isArray(rule.items) ? rule.items : [];
+    const isAll = items.includes(ALL_ITEMS_VALUE) || items.length === 0;
+    setAllItems(isAll);
+    setSelectedItems(isAll ? [] : items);
+    setSelectedUsers(Array.isArray(rule.userIds) ? [...rule.userIds] : []);
+    // Scroll form into view for mobile
+    if (typeof document !== 'undefined') {
+      document.getElementById('notification-rule-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
   async function handleCreate(e) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
       const items = allItems ? [ALL_ITEMS_VALUE] : selectedItems;
-      const res = await createNotificationRule({
+      const payload = {
         category,
         items,
         userIds: selectedUsers,
-      });
-      if (res?.success === false) throw new Error(res.error || 'Failed to save rule');
-      setSelectedItems([]);
-      setSelectedUsers([]);
-      setAllItems(false);
+      };
+      const res = editingRuleId
+        ? await updateNotificationRule(editingRuleId, payload)
+        : await createNotificationRule(payload);
+      if (res?.success === false) {
+        throw new Error(res.error || (editingRuleId ? 'Failed to update rule' : 'Failed to save rule'));
+      }
+      resetForm();
       await refreshRules();
     } catch (err) {
       setError(err.message);
@@ -122,6 +152,7 @@ export default function ConfigureNotifications({ users = [] }) {
     try {
       const res = await deleteNotificationRule(id);
       if (res?.success === false) throw new Error(res.error || 'Failed to delete');
+      if (editingRuleId === id) resetForm();
       await refreshRules();
     } catch (err) {
       alert(err.message);
@@ -383,16 +414,30 @@ export default function ConfigureNotifications({ users = [] }) {
 
           <p className="text-sm text-portal-text-muted">
             Choose a submission type, the specific items to watch, and which users receive the email.
-            Sightings alert from anywhere. Species must match your rule (or select All).
+            Sightings alert from anywhere. Species must match your rule (or select All). Use Edit on a
+            rule to add or remove recipient emails.
           </p>
 
-          <form onSubmit={handleCreate} className="space-y-5 pb-6 border-b border-portal-border">
+          <form
+            id="notification-rule-form"
+            onSubmit={handleCreate}
+            className="space-y-5 pb-6 border-b border-portal-border"
+          >
+            {editingRuleId && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-portal border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                <span>Editing rule — change species and/or recipient emails, then save.</span>
+                <button type="button" className="text-xs font-semibold underline" onClick={resetForm} disabled={busy}>
+                  Cancel edit
+                </button>
+              </div>
+            )}
             <div>
               <label className="kpr-label">Submission type</label>
               <select
                 className="kpr-input max-w-xs"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
+                disabled={!!editingRuleId}
               >
                 {NOTIFICATION_CATEGORIES.map((c) => (
                   <option key={c.value} value={c.value}>
@@ -461,17 +506,28 @@ export default function ConfigureNotifications({ users = [] }) {
 
             {error && <p className="text-sm text-portal-danger">{error}</p>}
 
-            <button
-              type="submit"
-              className="kpr-btn"
-              disabled={
-                busy ||
-                selectedUsers.length === 0 ||
-                (!allItems && selectedItems.length === 0)
-              }
-            >
-              {busy ? 'Saving…' : 'Add notification rule'}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="submit"
+                className="kpr-btn"
+                disabled={
+                  busy ||
+                  selectedUsers.length === 0 ||
+                  (!allItems && selectedItems.length === 0)
+                }
+              >
+                {busy
+                  ? 'Saving…'
+                  : editingRuleId
+                    ? 'Save changes'
+                    : 'Add notification rule'}
+              </button>
+              {editingRuleId && (
+                <button type="button" className="kpr-btn-secondary" disabled={busy} onClick={resetForm}>
+                  Cancel
+                </button>
+              )}
+            </div>
           </form>
 
           <h3 className="text-sm font-semibold">Active rules</h3>
@@ -519,6 +575,14 @@ export default function ConfigureNotifications({ users = [] }) {
                         </span>
                       </td>
                       <td className="px-3 py-2.5 space-x-2 whitespace-nowrap">
+                        <button
+                          type="button"
+                          className="text-xs font-semibold text-kpr-green-light disabled:opacity-50"
+                          disabled={busy}
+                          onClick={() => startEdit(rule)}
+                        >
+                          Edit
+                        </button>
                         <button
                           type="button"
                           className="text-xs font-semibold text-amber-700 disabled:opacity-50"

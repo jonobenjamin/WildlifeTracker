@@ -13,7 +13,11 @@ router.get('/', async (req, res) => {
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
   const cronSecret = process.env.CRON_SECRET;
   const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+  // Vercel Cron sends Authorization: Bearer CRON_SECRET when set, and always
+  // sets x-vercel-cron: 1. Accept either so stuck alerts still flush.
+  const isVercelCron = req.headers['x-vercel-cron'] === '1';
   const authorized =
+    isVercelCron ||
     (cronSecret && token === cronSecret) ||
     (process.env.API_KEY && apiKey === process.env.API_KEY);
 
