@@ -28,11 +28,13 @@ function yearOptions() {
   return years;
 }
 
-function matchesTrackFilters(track, { day, month, year }) {
+function matchesTrackFilters(track, { day, month, year, dateStart, dateEnd }) {
   const raw = track.startTime || track.timestamp;
-  if (!raw) return !(day || month || year);
+  if (!raw) return !(day || month || year || dateStart || dateEnd);
   const d = dayjs(raw);
   if (!d.isValid()) return false;
+  if (dateStart && d.isBefore(dayjs(dateStart), 'day')) return false;
+  if (dateEnd && d.isAfter(dayjs(dateEnd).endOf('day'))) return false;
   if (day) return d.format('YYYY-MM-DD') === day;
   if (year && String(d.year()) !== String(year)) return false;
   if (month && d.format('MM') !== month) return false;
@@ -99,7 +101,7 @@ function TrackTable({ title, rows, empty, showVehicle }) {
   );
 }
 
-export default function ReportsTrackedSection({ tracking }) {
+export default function ReportsTrackedSection({ tracking, dateStart = '', dateEnd = '' }) {
   const [day, setDay] = useState('');
   const [month, setMonth] = useState('');
   const [year, setYear] = useState('');
@@ -107,8 +109,8 @@ export default function ReportsTrackedSection({ tracking }) {
   const mapObj = useRef({ map: null, L: null, trackLayer: null, boundary: null });
 
   const filtered = useMemo(
-    () => tracking.filter((t) => matchesTrackFilters(t, { day, month, year })),
-    [tracking, day, month, year]
+    () => tracking.filter((t) => matchesTrackFilters(t, { day, month, year, dateStart, dateEnd })),
+    [tracking, day, month, year, dateStart, dateEnd]
   );
 
   const patrols = useMemo(
@@ -263,8 +265,8 @@ export default function ReportsTrackedSection({ tracking }) {
           <h3 className="text-sm font-semibold">Track map</h3>
           <div className="inline-flex rounded-portal border border-portal-border overflow-hidden">
             {[
-              ['vehicle', 'Vehicle lines'],
-              ['patrol', 'Patrol lines'],
+              ['vehicle', 'Vehicle tracks'],
+              ['patrol', 'Patrol tracks'],
             ].map(([value, label]) => (
               <button
                 key={value}
