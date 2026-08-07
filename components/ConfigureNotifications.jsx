@@ -14,14 +14,7 @@ import {
   deleteNotificationRule,
   setNotificationRuleEnabled,
   getResendStatus,
-  sendTestNotificationEmail,
 } from '@/lib/actions/notificationRules';
-import {
-  diagnoseNotificationSetup,
-  flushPendingObservationAlerts,
-  replayLatestSightingAlert,
-  replayObservationAlert,
-} from '@/lib/actions/observationAlerts';
 
 export default function ConfigureNotifications({ users = [] }) {
   const [open, setOpen] = useState(false);
@@ -31,18 +24,12 @@ export default function ConfigureNotifications({ users = [] }) {
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [resendStatus, setResendStatus] = useState(null);
-  const [testMsg, setTestMsg] = useState(null);
 
   const [category, setCategory] = useState('sighting');
   const [selectedItems, setSelectedItems] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [allItems, setAllItems] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState(null);
-  const [testUserId, setTestUserId] = useState('');
-  const [replayId, setReplayId] = useState('');
-  const [replayAnimal, setReplayAnimal] = useState('Lion');
-  const [replayMsg, setReplayMsg] = useState(null);
-  const [diag, setDiag] = useState(null);
 
   const emailUsers = useMemo(
     () =>
@@ -114,7 +101,6 @@ export default function ConfigureNotifications({ users = [] }) {
     setAllItems(isAll);
     setSelectedItems(isAll ? [] : items);
     setSelectedUsers(Array.isArray(rule.userIds) ? [...rule.userIds] : []);
-    // Scroll form into view for mobile
     if (typeof document !== 'undefined') {
       document.getElementById('notification-rule-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -169,92 +155,6 @@ export default function ConfigureNotifications({ users = [] }) {
       await refreshRules();
     } catch (err) {
       alert(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleTestEmail() {
-    setBusy(true);
-    setTestMsg(null);
-    setError(null);
-    try {
-      const res = await sendTestNotificationEmail(testUserId || emailUsers[0]?.id);
-      if (res?.success === false) throw new Error(res.error || 'Test email failed');
-      setTestMsg(`Test email sent to ${res.email}`);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDiagnose() {
-    setBusy(true);
-    setError(null);
-    setDiag(null);
-    try {
-      const res = await diagnoseNotificationSetup();
-      if (res?.success === false) throw new Error(res.error || 'Diagnose failed');
-      setDiag(res);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleFlush() {
-    setBusy(true);
-    setReplayMsg(null);
-    setError(null);
-    try {
-      const res = await flushPendingObservationAlerts({ hours: 168, force: true, limit: 30 });
-      if (res?.success === false) throw new Error(res.error || 'Flush failed');
-      const firstFail = (res.results || []).find((r) => r.success === false);
-      setReplayMsg(
-        `${res.message}.` +
-          (firstFail ? ` First failure: ${firstFail.reason || firstFail.error || 'unknown'} (obs ${firstFail.observationId})` : '')
-      );
-      if (res.sent === 0 && res.failed > 0 && firstFail) {
-        setError(firstFail.reason || firstFail.error || 'All alerts failed — see message above');
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleReplayLatest() {
-    setBusy(true);
-    setReplayMsg(null);
-    setError(null);
-    try {
-      const res = await replayLatestSightingAlert(replayAnimal);
-      if (res?.success === false) {
-        throw new Error(res.error || res.reason || 'Replay failed');
-      }
-      setReplayMsg(`Alert sent for ${res.animal || replayAnimal} (${res.observationId}).`);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleReplayById() {
-    setBusy(true);
-    setReplayMsg(null);
-    setError(null);
-    try {
-      const res = await replayObservationAlert(replayId);
-      if (res?.success === false) {
-        throw new Error(res.error || res.reason || 'Replay failed');
-      }
-      setReplayMsg(`Alert sent for observation ${res.observationId}.`);
-    } catch (err) {
-      setError(err.message);
     } finally {
       setBusy(false);
     }
@@ -323,93 +223,6 @@ export default function ConfigureNotifications({ users = [] }) {
                 redeploy.
               </>
             )}
-          </div>
-
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-[220px] flex-1">
-              <label className="kpr-label">Send test email to</label>
-              <select
-                className="kpr-input"
-                value={testUserId}
-                onChange={(e) => setTestUserId(e.target.value)}
-              >
-                <option value="">Select user…</option>
-                {emailUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} ({u.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button
-              type="button"
-              className="kpr-btn-secondary"
-              disabled={busy || !testUserId}
-              onClick={handleTestEmail}
-            >
-              Send test
-            </button>
-          </div>
-          {testMsg && <p className="text-sm text-green-800">{testMsg}</p>}
-
-          <div className="rounded-portal border border-portal-border p-4 space-y-3 bg-portal-surface-muted/30">
-            <h3 className="text-sm font-semibold">Fix stuck alerts</h3>
-            <p className="text-xs text-portal-text-muted">
-              Plain test emails can work while sighting alerts fail (rules/recipients). Use these to
-              see the real error and force-send for recent Firestore observations.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className="kpr-btn-secondary" disabled={busy} onClick={handleDiagnose}>
-                Diagnose rules
-              </button>
-              <button type="button" className="kpr-btn" disabled={busy} onClick={handleFlush}>
-                Send alerts for recent observations
-              </button>
-            </div>
-            {diag && (
-              <pre className="text-[11px] overflow-auto max-h-48 rounded-portal bg-black/5 p-3 whitespace-pre-wrap">
-                {JSON.stringify(diag, null, 2)}
-              </pre>
-            )}
-            <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-portal-border">
-              <div>
-                <label className="kpr-label">Species</label>
-                <input
-                  className="kpr-input"
-                  value={replayAnimal}
-                  onChange={(e) => setReplayAnimal(e.target.value)}
-                  placeholder="Lion"
-                />
-              </div>
-              <button
-                type="button"
-                className="kpr-btn-secondary"
-                disabled={busy || !replayAnimal}
-                onClick={handleReplayLatest}
-              >
-                Email latest {replayAnimal || 'sighting'}
-              </button>
-            </div>
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex-1 min-w-[220px]">
-                <label className="kpr-label">Or observation document ID</label>
-                <input
-                  className="kpr-input"
-                  value={replayId}
-                  onChange={(e) => setReplayId(e.target.value)}
-                  placeholder="Paste Firestore document id"
-                />
-              </div>
-              <button
-                type="button"
-                className="kpr-btn-secondary"
-                disabled={busy || !replayId.trim()}
-                onClick={handleReplayById}
-              >
-                Replay by ID
-              </button>
-            </div>
-            {replayMsg && <p className="text-sm text-green-800">{replayMsg}</p>}
           </div>
 
           <p className="text-sm text-portal-text-muted">
