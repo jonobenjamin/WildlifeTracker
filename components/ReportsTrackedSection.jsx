@@ -6,41 +6,6 @@ import LeafletMap from '@/components/LeafletMap';
 import { fetchGeoJson } from '@/lib/mapIcons';
 import { buildTrackLayer, trackColor, trackLabel } from '@/lib/trackLayers';
 
-const MONTHS = [
-  ['01', 'January'],
-  ['02', 'February'],
-  ['03', 'March'],
-  ['04', 'April'],
-  ['05', 'May'],
-  ['06', 'June'],
-  ['07', 'July'],
-  ['08', 'August'],
-  ['09', 'September'],
-  ['10', 'October'],
-  ['11', 'November'],
-  ['12', 'December'],
-];
-
-function yearOptions() {
-  const current = new Date().getFullYear();
-  const years = [];
-  for (let y = current; y >= 2020; y--) years.push(y);
-  return years;
-}
-
-function matchesTrackFilters(track, { day, month, year, dateStart, dateEnd }) {
-  const raw = track.startTime || track.timestamp;
-  if (!raw) return !(day || month || year || dateStart || dateEnd);
-  const d = dayjs(raw);
-  if (!d.isValid()) return false;
-  if (dateStart && d.isBefore(dayjs(dateStart), 'day')) return false;
-  if (dateEnd && d.isAfter(dayjs(dateEnd).endOf('day'))) return false;
-  if (day) return d.format('YYYY-MM-DD') === day;
-  if (year && String(d.year()) !== String(year)) return false;
-  if (month && d.format('MM') !== month) return false;
-  return true;
-}
-
 function formatDuration(seconds) {
   if (seconds == null) return '—';
   const h = Math.floor(seconds / 3600);
@@ -101,25 +66,18 @@ function TrackTable({ title, rows, empty, showVehicle }) {
   );
 }
 
-export default function ReportsTrackedSection({ tracking, dateStart = '', dateEnd = '' }) {
-  const [day, setDay] = useState('');
-  const [month, setMonth] = useState('');
-  const [year, setYear] = useState('');
+/** Tracked km tables + map. Date filtering is handled by the parent reports page. */
+export default function ReportsTrackedSection({ tracking }) {
   const [lineMode, setLineMode] = useState('vehicle'); // vehicle | patrol
   const mapObj = useRef({ map: null, L: null, trackLayer: null, boundary: null });
 
-  const filtered = useMemo(
-    () => tracking.filter((t) => matchesTrackFilters(t, { day, month, year, dateStart, dateEnd })),
-    [tracking, day, month, year, dateStart, dateEnd]
-  );
-
   const patrols = useMemo(
-    () => filtered.filter((t) => (t.trackingType || '').toLowerCase() === 'patrol'),
-    [filtered]
+    () => tracking.filter((t) => (t.trackingType || '').toLowerCase() === 'patrol'),
+    [tracking]
   );
   const vehicles = useMemo(
-    () => filtered.filter((t) => (t.trackingType || '').toLowerCase() === 'vehicle'),
-    [filtered]
+    () => tracking.filter((t) => (t.trackingType || '').toLowerCase() === 'vehicle'),
+    [tracking]
   );
 
   const linesToShow = lineMode === 'vehicle' ? vehicles : patrols;
@@ -181,75 +139,6 @@ export default function ReportsTrackedSection({ tracking, dateStart = '', dateEn
 
   return (
     <div className="space-y-4">
-      <div className="kpr-card p-4">
-        <h3 className="text-sm font-semibold mb-3">Date filters</h3>
-        <p className="text-xs text-portal-text-muted mb-3">
-          Pick a specific day, or filter by month and/or year.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div>
-            <label className="block text-[11px] text-portal-text-muted mb-1">Specific day</label>
-            <input
-              type="date"
-              className="kpr-input"
-              value={day}
-              onChange={(e) => {
-                setDay(e.target.value);
-                if (e.target.value) {
-                  setMonth('');
-                  setYear('');
-                }
-              }}
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] text-portal-text-muted mb-1">Month</label>
-            <select
-              className="kpr-input"
-              value={month}
-              disabled={!!day}
-              onChange={(e) => setMonth(e.target.value)}
-            >
-              <option value="">All months</option>
-              {MONTHS.map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[11px] text-portal-text-muted mb-1">Year</label>
-            <select
-              className="kpr-input"
-              value={year}
-              disabled={!!day}
-              onChange={(e) => setYear(e.target.value)}
-            >
-              <option value="">All years</option>
-              {yearOptions().map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        {(day || month || year) && (
-          <button
-            type="button"
-            className="mt-3 text-xs font-semibold text-portal-text-muted hover:text-portal-text"
-            onClick={() => {
-              setDay('');
-              setMonth('');
-              setYear('');
-            }}
-          >
-            Clear filters
-          </button>
-        )}
-      </div>
-
       <div className="flex flex-col lg:flex-row gap-4">
         <TrackTable title={`Patrol (${patrols.length})`} rows={patrols} empty="No patrol tracks for this filter." />
         <TrackTable

@@ -100,7 +100,9 @@ router.post('/login', async (req, res) => {
     res.json({
       success: true,
       customToken,
-      name: data.name
+      name: data.name,
+      role: (data.role || 'user').toString().toLowerCase(),
+      email: data.email || null,
     });
   } catch (error) {
     console.error('Login error:', error);

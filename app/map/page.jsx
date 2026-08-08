@@ -226,9 +226,18 @@ export default function ConcessionMapPage() {
         style: { color: '#4c1918', weight: 2.5, fillOpacity: 0.03 },
       }).addTo(map);
 
-      mapObj.current.baseLayers.roads = L.geoJSON(roads, {
+      // One Leaflet path per road feature (named in popup); user roads merged later.
+      const roadsGroup = L.layerGroup();
+      L.geoJSON(roads, {
         style: { color: '#8a6d3b', weight: 1.5, opacity: 0.8 },
+        onEachFeature: (feature, layer) => {
+          const name = feature.properties?.Roads || feature.properties?.name;
+          if (name) layer.bindPopup(`<strong>${escapeHtml(name)}</strong>`);
+          roadsGroup.addLayer(layer);
+        },
       });
+      mapObj.current.baseLayers.roads = roadsGroup;
+      mapObj.current.userRoadsLayer = null;
 
       mapObj.current.baseLayers.camps = L.geoJSON(camps, {
         pointToLayer: (feature, latlng) => L.marker(latlng, { icon: lodgeIcon(L) }),
@@ -278,15 +287,43 @@ export default function ConcessionMapPage() {
 
       applyBaseVisibility();
 
-      const [treesRes, obsRes, trackRes] = await Promise.all([
+      const [treesRes, obsRes, trackRes, roadsRes] = await Promise.all([
         apiFetch('/api/trees').catch(() => ({ data: [] })),
         apiFetch('/api/observations').catch(() => ({ data: [] })),
         apiFetch('/api/tracking').catch(() => ({ data: [] })),
+        apiFetch('/api/roads').catch(() => ({ data: [] })),
       ]);
 
       setAllTrees(treesRes.data || []);
       setAllObservations(obsRes.data || []);
       setAllTracking(trackRes.data || []);
+
+      const userRoads = roadsRes.data || [];
+      if (userRoads.length && mapObj.current.baseLayers.roads) {
+        const userGroup = L.layerGroup();
+        userRoads.forEach((road) => {
+          const coords = road.coordinates;
+          if (!Array.isArray(coords) || coords.length < 2) return;
+          const latlngs = coords
+            .filter((c) => Array.isArray(c) && c.length >= 2)
+            .map(([lng, lat]) => [lat, lng]);
+          if (latlngs.length < 2) return;
+          const name = road.name || road.Roads || 'Road';
+          const line = L.polyline(latlngs, {
+            color: '#1565C0',
+            weight: 2.5,
+            opacity: 0.9,
+          });
+          line.bindPopup(
+            `<strong>${escapeHtml(name)}</strong><br>` +
+              `User road${road.user ? `<br>By: ${escapeHtml(road.user)}` : ''}`
+          );
+          userGroup.addLayer(line);
+        });
+        mapObj.current.userRoadsLayer = userGroup;
+        userGroup.eachLayer((layer) => mapObj.current.baseLayers.roads.addLayer(layer));
+      }
+
       setLoading(false);
     } catch (e) {
       setError(e.message);

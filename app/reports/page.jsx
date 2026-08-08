@@ -500,7 +500,7 @@ export default function ReportsPage() {
             </section>
           </div>
         ) : (
-          <ReportsTrackedSection tracking={filteredTracking} dateStart={dateStart} dateEnd={dateEnd} />
+          <ReportsTrackedSection tracking={filteredTracking} />
         )}
       </div>
     </AppShell>
