@@ -34,9 +34,18 @@ async function checkUserRevoked(db, userIdentifier) {
 }
 
 function normalizeCoordinates(raw) {
-  if (!Array.isArray(raw) || raw.length < 2) return null;
+  // Accept array or JSON string (Firestore cannot store nested arrays).
+  let list = raw;
+  if (typeof raw === 'string') {
+    try {
+      list = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(list) || list.length < 2) return null;
   const coords = [];
-  for (const c of raw) {
+  for (const c of list) {
     if (!Array.isArray(c) || c.length < 2) continue;
     const lon = Number(c[0]);
     const lat = Number(c[1]);
@@ -44,6 +53,17 @@ function normalizeCoordinates(raw) {
     coords.push([lon, lat]);
   }
   return coords.length >= 2 ? coords : null;
+}
+
+/** Shape a Firestore road doc for API clients (coordinates always as array). */
+function roadToClient(id, data) {
+  const coords = normalizeCoordinates(data.coordinates);
+  if (!coords) return null;
+  return {
+    id,
+    ...data,
+    coordinates: coords,
+  };
 }
 
 module.exports = (db) => {
@@ -60,10 +80,8 @@ module.exports = (db) => {
       const snapshot = await db.collection('roads').get();
       const roads = [];
       snapshot.forEach((doc) => {
-        const data = doc.data();
-        if (Array.isArray(data.coordinates) && data.coordinates.length >= 2) {
-          roads.push({ id: doc.id, ...data });
-        }
+        const shaped = roadToClient(doc.id, doc.data());
+        if (shaped) roads.push(shaped);
       });
       roads.sort((a, b) => {
         const ta = a.updatedAt || a.createdAt || '';
@@ -108,10 +126,11 @@ module.exports = (db) => {
       }
 
       const now = new Date().toISOString();
+      // Store coordinates as JSON string — Firestore rejects nested arrays.
       const doc = {
         name: roadName,
         Roads: roadName,
-        coordinates: coords,
+        coordinates: JSON.stringify(coords),
         user: user || null,
         localId: localId || null,
         source: 'user',
@@ -123,11 +142,15 @@ module.exports = (db) => {
       res.status(201).json({
         success: true,
         id: ref.id,
-        data: { id: ref.id, ...doc },
+        data: roadToClient(ref.id, doc),
       });
     } catch (error) {
       console.error('POST /api/roads error:', error);
-      res.status(500).json({ success: false, error: 'Failed to create road' });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to create road',
+        message: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      });
     }
   });
 
@@ -151,12 +174,12 @@ module.exports = (db) => {
         updates.Roads = updates.name;
       }
       const coords = normalizeCoordinates(req.body.coordinates);
-      if (coords) updates.coordinates = coords;
+      if (coords) updates.coordinates = JSON.stringify(coords);
       if (req.body.user !== undefined) updates.user = req.body.user;
 
       await ref.update(updates);
       const updated = await ref.get();
-      res.json({ success: true, id, data: { id, ...updated.data() } });
+      res.json({ success: true, id, data: roadToClient(id, updated.data()) });
     } catch (error) {
       console.error('PATCH /api/roads error:', error);
       res.status(500).json({ success: false, error: 'Failed to update road' });
