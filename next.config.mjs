@@ -9,6 +9,12 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
   images: { unoptimized: true },
   outputFileTracingRoot: __dirname,
+  // Ensure road seed GeoJSON is present in the Vercel serverless bundle
+  // (fs paths alone are often omitted from output file tracing).
+  outputFileTracingIncludes: {
+    '/pages/api/[[...path]]': ['./server/data/**/*'],
+    '/api/[[...path]]': ['./server/data/**/*'],
+  },
 };
 
 export default nextConfig;

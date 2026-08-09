@@ -80,7 +80,11 @@ module.exports = (db) => {
         return res.status(503).json({ success: false, error: 'Database not available' });
       }
 
-      const seedResult = await ensureStaticRoadsSeeded(db);
+      // Seed/resume until complete (or one pass). Partial seeds continue on next GET.
+      let seedResult = await ensureStaticRoadsSeeded(db);
+      if (seedResult && seedResult.complete === false && seedResult.reason === 'partial') {
+        seedResult = await ensureStaticRoadsSeeded(db);
+      }
 
       const sourceFilter = String(req.query.source || '').toLowerCase().trim();
       let snapshot;
