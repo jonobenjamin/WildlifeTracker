@@ -16,6 +16,7 @@ import { divIcon, dotIcon, recentPinIcon, colorForLabel, ensureHeatPlugin, fetch
 import { buildTrackLayer, trackColor, trackLabel, trackVerticesAsHeatPoints } from '@/lib/trackLayers';
 import { addHomeZoomControl } from '@/lib/homeZoomControl';
 import { attachWeatherPopup } from '@/lib/weather';
+import { loadRoadsDataset } from '@/lib/roadsDataset';
 
 const HOME_CAMPS = ['tau camp', 'little sable camp'];
 const HOME_FIT = { padding: [60, 60], maxZoom: 13 };
@@ -225,7 +226,7 @@ export default function ConcessionMapPage() {
         style: { color: '#4c1918', weight: 2.5, fillOpacity: 0.03 },
       }).addTo(map);
 
-      // All roads (static base + user segments) come from /api/roads after seed.
+      // Roads: same as phone — GeoJSON base + synced user roads (see loadRoadsDataset).
       mapObj.current.baseLayers.roads = L.layerGroup();
       mapObj.current.userRoadsLayer = null;
 
@@ -277,18 +278,18 @@ export default function ConcessionMapPage() {
 
       applyBaseVisibility();
 
-      const [treesRes, obsRes, trackRes, roadsRes] = await Promise.all([
+      const [treesRes, obsRes, trackRes, roadsBundle] = await Promise.all([
         apiFetch('/api/trees').catch(() => ({ data: [] })),
         apiFetch('/api/observations').catch(() => ({ data: [] })),
         apiFetch('/api/tracking').catch(() => ({ data: [] })),
-        apiFetch('/api/roads').catch(() => ({ data: [] })),
+        loadRoadsDataset().catch(() => ({ roads: [] })),
       ]);
 
       setAllTrees(treesRes.data || []);
       setAllObservations(obsRes.data || []);
       setAllTracking(trackRes.data || []);
 
-      const allRoads = roadsRes.data || [];
+      const allRoads = roadsBundle.roads || [];
       if (allRoads.length && mapObj.current.baseLayers.roads) {
         allRoads.forEach((road) => {
           const coords = road.coordinates;

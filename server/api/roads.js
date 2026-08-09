@@ -1,7 +1,6 @@
 const express = require('express');
 const { createFieldAuth } = require('../middleware/fieldAuth');
 const { archiveAndDelete } = require('../lib/archiveDelete');
-const { ensureStaticRoadsSeeded } = require('../lib/seedStaticRoads');
 
 const router = express.Router();
 
@@ -68,22 +67,27 @@ function roadToClient(id, data) {
   };
 }
 
+async function listHiddenStaticIds(db) {
+  try {
+    const snap = await db.collection('road_tombstones').get();
+    return snap.docs.map((d) => d.id);
+  } catch (e) {
+    console.warn('listHiddenStaticIds:', e.message);
+    return [];
+  }
+}
+
 module.exports = (db) => {
   const validateApiKey = createFieldAuth(db);
   router.use(validateApiKey);
 
-  // GET /api/roads — all roads (static base + user segments) after one-time seed
+  // GET /api/roads — Firestore roads (user-drawn + any admin overrides).
+  // Base network lives in KPR_roads.geojson on clients (same as the phone).
   // Optional ?source=user|static to filter (field PWA should use source=user)
   router.get('/', async (req, res) => {
     try {
       if (!db) {
         return res.status(503).json({ success: false, error: 'Database not available' });
-      }
-
-      // Seed/resume until complete (or one pass). Partial seeds continue on next GET.
-      let seedResult = await ensureStaticRoadsSeeded(db);
-      if (seedResult && seedResult.complete === false && seedResult.reason === 'partial') {
-        seedResult = await ensureStaticRoadsSeeded(db);
       }
 
       const sourceFilter = String(req.query.source || '').toLowerCase().trim();
@@ -108,11 +112,13 @@ module.exports = (db) => {
         return String(tb).localeCompare(String(ta));
       });
 
+      const hiddenStaticIds = await listHiddenStaticIds(db);
+
       res.json({
         success: true,
         data: roads,
         count: roads.length,
-        seed: seedResult,
+        hiddenStaticIds,
       });
     } catch (error) {
       console.error('GET /api/roads error:', error);
@@ -120,15 +126,12 @@ module.exports = (db) => {
     }
   });
 
-  // POST /api/roads — create a GPS-traced road (appended to the same collection)
+  // POST /api/roads — create a GPS-traced road
   router.post('/', async (req, res) => {
     try {
       if (!db) {
         return res.status(503).json({ success: false, error: 'Database not available' });
       }
-
-      // Ensure base network exists first so user roads sit alongside it.
-      await ensureStaticRoadsSeeded(db);
 
       const { name, coordinates, user, localId, createdAt } = req.body;
       const roadName = String(name || '').trim();
@@ -181,7 +184,7 @@ module.exports = (db) => {
     }
   });
 
-  // PATCH /api/roads/:id
+  // PATCH /api/roads/:id — update, or upsert base GeoJSON segments on first edit
   router.patch('/:id', async (req, res) => {
     try {
       if (!db) {
@@ -191,11 +194,39 @@ module.exports = (db) => {
       const { id } = req.params;
       const ref = db.collection('roads').doc(id);
       const existing = await ref.get();
+      const now = new Date().toISOString();
+
       if (!existing.exists) {
-        return res.status(404).json({ success: false, error: 'Road not found' });
+        const coords = normalizeCoordinates(req.body.coordinates);
+        const roadName = String(req.body.name || '').trim();
+        if (!coords || !roadName) {
+          return res.status(404).json({ success: false, error: 'Road not found' });
+        }
+        const source =
+          req.body.source || (String(id).startsWith('static_') ? 'static' : 'user');
+        const doc = {
+          name: roadName,
+          Roads: roadName,
+          coordinates: JSON.stringify(coords),
+          user: req.body.user !== undefined ? req.body.user : null,
+          localId: null,
+          source,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await ref.set(doc);
+        // Editing a previously tombstoned base road restores it.
+        if (String(id).startsWith('static_')) {
+          try {
+            await db.collection('road_tombstones').doc(id).delete();
+          } catch {
+            /* ignore */
+          }
+        }
+        return res.json({ success: true, id, data: roadToClient(id, doc), created: true });
       }
 
-      const updates = { updatedAt: new Date().toISOString() };
+      const updates = { updatedAt: now };
       if (req.body.name) {
         updates.name = String(req.body.name).trim();
         updates.Roads = updates.name;
@@ -213,7 +244,7 @@ module.exports = (db) => {
     }
   });
 
-  // DELETE /api/roads/:id — archive then remove
+  // DELETE /api/roads/:id — archive Firestore doc; tombstone base GeoJSON ids
   router.delete('/:id', async (req, res) => {
     try {
       if (!db) {
@@ -221,12 +252,32 @@ module.exports = (db) => {
       }
       const { id } = req.params;
       const deletedBy = req.body?.deletedBy || req.query?.deletedBy || 'unknown';
-      const result = await archiveAndDelete(db, {
-        collection: 'roads',
-        id,
-        deletedBy,
-        dataType: 'roads',
-      });
+      const ref = db.collection('roads').doc(id);
+      const existing = await ref.get();
+      const isStatic = String(id).startsWith('static_');
+
+      let result = { success: true, archived: false, originalId: id, dataType: 'roads' };
+
+      if (existing.exists) {
+        result = await archiveAndDelete(db, {
+          collection: 'roads',
+          id,
+          deletedBy,
+          dataType: 'roads',
+        });
+      } else if (!isStatic) {
+        return res.status(404).json({ success: false, error: 'Road not found' });
+      }
+
+      // Hide base segments that still exist in the public GeoJSON.
+      if (isStatic) {
+        await db.collection('road_tombstones').doc(id).set({
+          deletedAt: new Date().toISOString(),
+          deletedBy,
+        });
+        result.tombstoned = true;
+      }
+
       res.json(result);
     } catch (error) {
       console.error('DELETE /api/roads error:', error);

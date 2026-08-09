@@ -7,6 +7,7 @@ import LeafletMap from '@/components/LeafletMap';
 import { useAuth, useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
 import { colorForLabel, dotIcon, fetchGeoJson } from '@/lib/mapIcons';
+import { loadRoadsDataset } from '@/lib/roadsDataset';
 
 const DATA_TYPES = [
   { value: 'sightings', label: 'Sightings' },
@@ -87,8 +88,9 @@ export default function DataManagementPage() {
         const res = await apiFetch('/api/trees');
         setItems(res.data || []);
       } else if (dataType === 'roads') {
-        const res = await apiFetch('/api/roads');
-        setItems(res.data || []);
+        // Same model as the phone: GeoJSON base network + synced drawn roads.
+        const { roads } = await loadRoadsDataset();
+        setItems(roads);
       }
     } catch (e) {
       setError(e.message || 'Failed to load data');
@@ -228,9 +230,14 @@ export default function DataManagementPage() {
           body: JSON.stringify(payload),
         });
       } else if (dataType === 'roads') {
+        // Upsert so base GeoJSON segments can be saved into Firestore on first edit.
         await apiFetch(`/api/roads/${id}`, {
           method: 'PATCH',
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            ...payload,
+            coordinates: editing.coordinates,
+            source: editing.source || 'static',
+          }),
         });
       }
       setEditing(null);
