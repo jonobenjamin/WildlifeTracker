@@ -113,19 +113,8 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// In-memory store for PINs (in production, use Redis or database)
-// PINs expire after 15 minutes
-const pinStore = new Map();
-
-// Clean up expired PINs every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, data] of pinStore.entries()) {
-    if (now - data.timestamp > 15 * 60 * 1000) { // 15 minutes
-      pinStore.delete(key);
-    }
-  }
-}, 5 * 60 * 1000);
+const PIN_TTL_MS = 15 * 60 * 1000;
+const PIN_COLLECTION = 'auth_pins';
 
 // Generate a secure PIN
 function generatePin() {
@@ -135,6 +124,50 @@ function generatePin() {
 // Hash PIN for storage
 function hashPin(pin) {
   return crypto.createHash('sha256').update(pin).digest('hex');
+}
+
+function pinDocId(emailKey) {
+  return String(emailKey || '')
+    .toLowerCase()
+    .replace(/[^a-zA-Z0-9]/g, '_')
+    .slice(0, 120);
+}
+
+/** Persist PINs in Firestore — in-memory Maps do not work across Vercel serverless instances. */
+async function savePin(emailKey, data) {
+  const db = getDb();
+  await db
+    .collection(PIN_COLLECTION)
+    .doc(pinDocId(emailKey))
+    .set({
+      email: emailKey,
+      pin: data.pin,
+      name: data.name,
+      timestamp: data.timestamp,
+      attempts: data.attempts || 0,
+      expiresAt: data.timestamp + PIN_TTL_MS,
+    });
+}
+
+async function loadPin(emailKey) {
+  const db = getDb();
+  const snap = await db.collection(PIN_COLLECTION).doc(pinDocId(emailKey)).get();
+  if (!snap.exists) return null;
+  return { id: snap.id, ...snap.data() };
+}
+
+async function updatePinAttempts(emailKey, attempts) {
+  const db = getDb();
+  await db.collection(PIN_COLLECTION).doc(pinDocId(emailKey)).set({ attempts }, { merge: true });
+}
+
+async function deletePin(emailKey) {
+  const db = getDb();
+  await db.collection(PIN_COLLECTION).doc(pinDocId(emailKey)).delete().catch(() => {});
+}
+
+function userDocIdFromEmail(emailKey) {
+  return `email_${String(emailKey).toLowerCase().replace(/[^a-zA-Z0-9]/g, '_')}`;
 }
 
 // Email PIN request endpoint
@@ -160,17 +193,28 @@ router.post('/request-pin', async (req, res) => {
       });
     }
 
+    const emailKey = email.toLowerCase().trim();
+    const db = getDb();
+    const uid = userDocIdFromEmail(emailKey);
+    const existing = await db.collection('users').doc(uid).get();
+    if (existing.exists && existing.data()?.status === 'revoked') {
+      return res.status(403).json({
+        success: false,
+        message: 'This account has been suspended. Contact an administrator.',
+      });
+    }
+
     // Generate PIN
     const pin = generatePin();
     const hashedPin = hashPin(pin);
     const timestamp = Date.now();
 
-    // Store PIN with expiry
-    pinStore.set(email.toLowerCase(), {
+    // Store PIN with expiry (Firestore — shared across serverless instances)
+    await savePin(emailKey, {
       pin: hashedPin,
       name: name.trim(),
       timestamp,
-      attempts: 0
+      attempts: 0,
     });
 
     // Send PIN via Resend
@@ -333,11 +377,12 @@ router.post('/request-pin', async (req, res) => {
 </html>`;
 
       // Use existing email service (adapted for PIN sending)
-      await sendPinEmail(email, emailSubject, emailBodyHtml, true); // true = HTML email
+      await sendPinEmail(emailKey, emailSubject, emailBodyHtml, true); // true = HTML email
 
-      console.log(`PIN sent to ${email}: ${pin}`);
+      console.log(`PIN sent to ${emailKey}`);
     } catch (emailError) {
       console.error('Failed to send PIN email:', emailError);
+      await deletePin(emailKey);
       return res.status(500).json({
         success: false,
         message: 'Failed to send PIN email. Please try again.'
@@ -372,9 +417,9 @@ router.post('/verify-pin', async (req, res) => {
       });
     }
 
-    const emailKey = email.toLowerCase();
+    const emailKey = email.toLowerCase().trim();
     console.log('Looking up PIN for email:', emailKey);
-    const storedData = pinStore.get(emailKey);
+    const storedData = await loadPin(emailKey);
     console.log('Stored data found:', !!storedData);
 
     if (!storedData) {
@@ -387,8 +432,9 @@ router.post('/verify-pin', async (req, res) => {
 
     // Check expiry (15 minutes)
     const now = Date.now();
-    if (now - storedData.timestamp > 15 * 60 * 1000) {
-      pinStore.delete(emailKey);
+    const issuedAt = Number(storedData.timestamp) || 0;
+    if (!issuedAt || now - issuedAt > PIN_TTL_MS) {
+      await deletePin(emailKey);
       return res.status(400).json({
         success: false,
         message: 'PIN has expired. Please request a new PIN.'
@@ -396,8 +442,9 @@ router.post('/verify-pin', async (req, res) => {
     }
 
     // Check attempts (max 5)
-    if (storedData.attempts >= 5) {
-      pinStore.delete(emailKey);
+    const attempts = Number(storedData.attempts) || 0;
+    if (attempts >= 5) {
+      await deletePin(emailKey);
       return res.status(400).json({
         success: false,
         message: 'Too many failed attempts. Please request a new PIN.'
@@ -410,11 +457,12 @@ router.post('/verify-pin', async (req, res) => {
     console.log('PIN hash comparison:', hashedInputPin === storedData.pin ? 'MATCH' : 'NO MATCH');
 
     if (hashedInputPin !== storedData.pin) {
-      storedData.attempts++;
-      console.log('Invalid PIN attempt', storedData.attempts, 'for:', emailKey);
+      const nextAttempts = attempts + 1;
+      await updatePinAttempts(emailKey, nextAttempts);
+      console.log('Invalid PIN attempt', nextAttempts, 'for:', emailKey);
       return res.status(400).json({
         success: false,
-        message: `Invalid PIN. ${5 - storedData.attempts} attempts remaining.`
+        message: `Invalid PIN. ${5 - nextAttempts} attempts remaining.`
       });
     }
 
@@ -422,10 +470,11 @@ router.post('/verify-pin', async (req, res) => {
 
     // PIN is valid - create custom token
     console.log('Creating Firebase custom token...');
-    const uid = `email_${emailKey.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const uid = userDocIdFromEmail(emailKey);
+    const displayName = (storedData.name || '').trim() || emailKey;
     const additionalClaims = {
       email: emailKey,
-      name: storedData.name,
+      name: displayName,
       provider: 'email_pin'
     };
 
@@ -434,22 +483,44 @@ router.post('/verify-pin', async (req, res) => {
     console.log('Custom token created successfully');
 
     const db = getDb();
-    await db.collection('users').doc(uid).set(
-      { lastLogin: admin.firestore.FieldValue.serverTimestamp() },
+    const userRef = db.collection('users').doc(uid);
+    const userSnap = await userRef.get();
+    if (userSnap.exists && userSnap.data()?.status === 'revoked') {
+      await deletePin(emailKey);
+      return res.status(403).json({
+        success: false,
+        message: 'This account has been suspended. Contact an administrator.',
+      });
+    }
+
+    const existing = userSnap.exists ? userSnap.data() || {} : {};
+    const role = (existing.role || 'viewer').toString().toLowerCase();
+    await userRef.set(
+      {
+        uid,
+        email: emailKey,
+        name: existing.name || displayName,
+        role,
+        status: existing.status || 'active',
+        lastLogin: admin.firestore.FieldValue.serverTimestamp(),
+        ...(userSnap.exists ? {} : { registeredAt: admin.firestore.FieldValue.serverTimestamp(), createdBy: 'pin_login' }),
+      },
       { merge: true }
     );
 
     // Clean up used PIN
-    pinStore.delete(emailKey);
+    await deletePin(emailKey);
 
-    console.log(`PIN verified for ${email}, created custom token for ${uid}`);
+    console.log(`PIN verified for ${emailKey}, created custom token for ${uid}`);
 
     const responseData = {
       success: true,
       customToken,
-      name: storedData.name
+      name: existing.name || displayName,
+      role,
+      email: emailKey,
     };
-    console.log('Sending response:', { success: true, hasToken: !!customToken, name: storedData.name });
+    console.log('Sending response:', { success: true, hasToken: !!customToken, name: responseData.name, role });
 
     res.json(responseData);
 

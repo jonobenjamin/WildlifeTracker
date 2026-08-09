@@ -317,15 +317,28 @@ function UserModal({ initial, onClose, onSave }) {
     setBusy(true);
     setError(null);
     try {
+      if (!name.trim()) throw new Error('Name is required');
+      if (!initial && !email.trim() && !phone.trim()) {
+        throw new Error('Email or phone is required');
+      }
+      if (password && password.length < 6) {
+        throw new Error('Password must be at least 6 characters');
+      }
       if (initial) {
-        const input = { name, role };
+        const input = { name: name.trim(), role };
         if (password) input.password = password;
         await onSave(input);
       } else {
-        await onSave({ name, email, phone, role, password: password || undefined });
+        await onSave({
+          name: name.trim(),
+          email: email.trim() || undefined,
+          phone: phone.trim() || undefined,
+          role,
+          password: password || undefined,
+        });
       }
     } catch (err) {
-      setError(err.message);
+      setError(err?.message || 'Failed to save user');
       setBusy(false);
     }
   }
@@ -334,20 +347,34 @@ function UserModal({ initial, onClose, onSave }) {
     <div className="fixed inset-0 bg-black/40 z-50 grid place-items-center p-4" onClick={onClose}>
       <div className="kpr-card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-base font-semibold mb-4">{initial ? 'Edit user' : 'Add user'}</h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
           <div>
             <label className="kpr-label">Name</label>
             <input className="kpr-input" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
           {!initial && (
             <>
+              <p className="text-xs text-portal-text-muted -mt-2">Provide an email and/or phone (at least one).</p>
               <div>
                 <label className="kpr-label">Email</label>
-                <input type="email" className="kpr-input" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <input
+                  type="text"
+                  inputMode="email"
+                  autoComplete="email"
+                  className="kpr-input"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.com"
+                />
               </div>
               <div>
                 <label className="kpr-label">Phone</label>
-                <input className="kpr-input" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <input
+                  className="kpr-input"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+267 …"
+                />
               </div>
             </>
           )}
@@ -366,7 +393,7 @@ function UserModal({ initial, onClose, onSave }) {
             <input
               type="password"
               className="kpr-input"
-              placeholder="Leave blank for app-only / PIN login"
+              placeholder="Min 6 characters — or leave blank for PIN login"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />

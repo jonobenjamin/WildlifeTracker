@@ -87,6 +87,21 @@ export function AuthProvider({ children }) {
     return () => unsub();
   }, []);
 
+  const applyLoginProfile = useCallback((data) => {
+    const nextRole = data?.role ? String(data.role).toLowerCase() : null;
+    if (nextRole) setRole(nextRole);
+    if (data?.name || data?.email || data?.role) {
+      setProfile((prev) => ({
+        uid: auth?.currentUser?.uid || prev?.uid || '',
+        name: data.name || prev?.name || '',
+        email: data.email || prev?.email || '',
+        phone: prev?.phone || '',
+        role: nextRole || prev?.role || 'viewer',
+        status: 'active',
+      }));
+    }
+  }, []);
+
   const loginWithPassword = useCallback(async (name, password) => {
     if (!auth) throw new Error('Firebase Auth is not available in this browser');
     const res = await fetch(apiUrl('/api/auth/login'), {
@@ -100,9 +115,10 @@ export function AuthProvider({ children }) {
     if (auth.currentUser && data.name) {
       await updateProfile(auth.currentUser, { displayName: data.name }).catch(() => {});
     }
+    applyLoginProfile(data);
     await syncUserDoc(data);
     return data;
-  }, []);
+  }, [applyLoginProfile]);
 
   const requestPin = useCallback(async (email, name) => {
     const res = await fetch(apiUrl('/api/auth/request-pin'), {
@@ -128,9 +144,10 @@ export function AuthProvider({ children }) {
     if (auth.currentUser && data.name) {
       await updateProfile(auth.currentUser, { displayName: data.name }).catch(() => {});
     }
+    applyLoginProfile({ ...data, email });
     await syncUserDoc({ ...data, email });
     return data;
-  }, []);
+  }, [applyLoginProfile]);
 
   const signOut = useCallback(async () => {
     if (!auth) return;
@@ -151,21 +168,22 @@ async function syncUserDoc(data) {
   try {
     const userRef = doc(db, 'users', user.uid);
     const snap = await getDoc(userRef);
-    const base = {
-      uid: user.uid,
-      name: data.name || (snap.exists() ? snap.data().name : '') || '',
-      lastLogin: serverTimestamp(),
-    };
-    if (snap.exists()) {
-      const prev = snap.data();
-      await setDoc(
-        userRef,
-        { ...base, ...(prev.email ? { email: prev.email } : {}), ...(data.email ? { email: String(data.email).toLowerCase() } : {}) },
-        { merge: true }
-      );
-    } else {
-      await setDoc(userRef, { ...base, ...(data.email ? { email: String(data.email).toLowerCase() } : {}), role: 'viewer', status: 'active' }, { merge: true });
-    }
+    const prev = snap.exists() ? snap.data() : {};
+    const role = (data.role || prev.role || 'viewer').toString().toLowerCase();
+    await setDoc(
+      userRef,
+      {
+        uid: user.uid,
+        name: data.name || prev.name || '',
+        ...(prev.email || data.email
+          ? { email: String(data.email || prev.email || '').toLowerCase() }
+          : {}),
+        role,
+        status: prev.status || 'active',
+        lastLogin: serverTimestamp(),
+      },
+      { merge: true }
+    );
   } catch (e) {
     console.warn('Could not sync user doc:', e);
   }
