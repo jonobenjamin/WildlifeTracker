@@ -1,5 +1,6 @@
 const express = require('express');
 const { createFieldAuth } = require('../middleware/fieldAuth');
+const { archiveAndDelete } = require('../lib/archiveDelete');
 
 const router = express.Router();
 
@@ -262,6 +263,28 @@ module.exports = (db) => {
         updates.canopyHistory = canopyHistory;
       }
 
+      // Attribute edits from Data Management
+      if (req.body.species !== undefined) {
+        if (!VALID_SPECIES.includes(req.body.species)) {
+          return res.status(400).json({
+            success: false,
+            error: `Species must be one of: ${VALID_SPECIES.join(', ')}`,
+          });
+        }
+        updates.species = req.body.species;
+      }
+      if (req.body.speciesOther !== undefined) updates.speciesOther = req.body.speciesOther;
+      if (req.body.latitude !== undefined) {
+        const n = Number(req.body.latitude);
+        if (Number.isFinite(n)) updates.latitude = n;
+      }
+      if (req.body.longitude !== undefined) {
+        const n = Number(req.body.longitude);
+        if (Number.isFinite(n)) updates.longitude = n;
+      }
+      if (req.body.user !== undefined) updates.user = req.body.user;
+      if (req.body.notes !== undefined) updates.notes = req.body.notes;
+
       await docRef.update(updates);
 
       const updated = await docRef.get();
@@ -269,6 +292,28 @@ module.exports = (db) => {
     } catch (error) {
       console.error('PATCH /api/trees error:', error);
       res.status(500).json({ success: false, error: 'Failed to update tree' });
+    }
+  });
+
+  // DELETE /api/trees/:id — archive then remove
+  router.delete('/:id', async (req, res) => {
+    try {
+      if (!db) {
+        return res.status(503).json({ success: false, error: 'Database not available' });
+      }
+      const { id } = req.params;
+      const deletedBy = req.body?.deletedBy || req.query?.deletedBy || 'unknown';
+      const result = await archiveAndDelete(db, {
+        collection: 'trees',
+        id,
+        deletedBy,
+        dataType: 'trees',
+      });
+      res.json(result);
+    } catch (error) {
+      console.error('DELETE /api/trees error:', error);
+      const status = error.status || 500;
+      res.status(status).json({ success: false, error: error.message || 'Failed to delete tree' });
     }
   });
 

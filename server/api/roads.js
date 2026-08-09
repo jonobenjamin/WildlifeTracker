@@ -1,5 +1,6 @@
 const express = require('express');
 const { createFieldAuth } = require('../middleware/fieldAuth');
+const { archiveAndDelete } = require('../lib/archiveDelete');
 
 const router = express.Router();
 
@@ -183,6 +184,28 @@ module.exports = (db) => {
     } catch (error) {
       console.error('PATCH /api/roads error:', error);
       res.status(500).json({ success: false, error: 'Failed to update road' });
+    }
+  });
+
+  // DELETE /api/roads/:id — archive then remove
+  router.delete('/:id', async (req, res) => {
+    try {
+      if (!db) {
+        return res.status(503).json({ success: false, error: 'Database not available' });
+      }
+      const { id } = req.params;
+      const deletedBy = req.body?.deletedBy || req.query?.deletedBy || 'unknown';
+      const result = await archiveAndDelete(db, {
+        collection: 'roads',
+        id,
+        deletedBy,
+        dataType: 'roads',
+      });
+      res.json(result);
+    } catch (error) {
+      console.error('DELETE /api/roads error:', error);
+      const status = error.status || 500;
+      res.status(status).json({ success: false, error: error.message || 'Failed to delete road' });
     }
   });
 

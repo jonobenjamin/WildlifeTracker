@@ -4,6 +4,7 @@ const admin = require('firebase-admin');
 const { getStorage } = require('firebase-admin/storage');
 const { sendObservationNotification } = require('../services/notificationServices');
 const { createFieldAuth } = require('../middleware/fieldAuth');
+const { archiveAndDelete } = require('../lib/archiveDelete');
 
 const router = express.Router();
 
@@ -555,6 +556,86 @@ router.post('/', upload.single('image'), async (req, res) => {
       error: 'Failed to create observation',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
+  }
+});
+
+// PATCH /api/observations/:id — update attributes (Data Management)
+router.patch('/:id', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not available' });
+    }
+    const { id } = req.params;
+    const ref = db.collection('observations').doc(id);
+    const snap = await ref.get();
+    if (!snap.exists) {
+      return res.status(404).json({ success: false, error: 'Observation not found' });
+    }
+
+    const allowed = [
+      'category',
+      'animal',
+      'pride',
+      'leopard',
+      'activity',
+      'age',
+      'vulture_tagged',
+      'incident_type',
+      'poaching_type',
+      'poached_animal',
+      'maintenance_type',
+      'notes',
+      'user',
+      'timestamp',
+      'latitude',
+      'longitude',
+    ];
+    const updates = { updatedAt: new Date().toISOString() };
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        if (key === 'latitude' || key === 'longitude') {
+          const n = Number(req.body[key]);
+          if (Number.isFinite(n)) updates[key] = n;
+        } else {
+          updates[key] = req.body[key];
+        }
+      }
+    }
+
+    await ref.update(updates);
+    const updated = await ref.get();
+    res.json({ success: true, data: { id, ...updated.data() } });
+  } catch (error) {
+    console.error('PATCH /api/observations error:', error);
+    res.status(500).json({ success: false, error: 'Failed to update observation' });
+  }
+});
+
+// DELETE /api/observations/:id — archive to deleted_records then remove
+router.delete('/:id', async (req, res) => {
+  try {
+    if (!db) {
+      return res.status(503).json({ success: false, error: 'Database not available' });
+    }
+    const { id } = req.params;
+    const deletedBy = req.body?.deletedBy || req.query?.deletedBy || 'unknown';
+    const snap = await db.collection('observations').doc(id).get();
+    if (!snap.exists) {
+      return res.status(404).json({ success: false, error: 'Observation not found' });
+    }
+    const category = String(snap.data()?.category || '').toLowerCase();
+    const dataType = category === 'incident' ? 'incidents' : category === 'maintenance' ? 'maintenance' : 'sightings';
+    const result = await archiveAndDelete(db, {
+      collection: 'observations',
+      id,
+      deletedBy,
+      dataType,
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('DELETE /api/observations error:', error);
+    const status = error.status || 500;
+    res.status(status).json({ success: false, error: error.message || 'Failed to delete observation' });
   }
 });
 

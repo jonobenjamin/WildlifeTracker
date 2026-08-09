@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: '/map', label: 'Concession Map', roles: ['admin'] },
   { href: '/map-users', label: 'Wildlife Map', roles: ['admin', 'user', 'viewer'] },
   { href: '/admin', label: 'Admin', roles: ['admin'] },
+  { href: '/data-management', label: 'Data Management', roles: ['admin'] },
   { href: '/reports', label: 'Reporting', roles: ['admin'] },
   { href: '/vehicles', label: 'Vehicle Tracker', roles: ['admin'] },
   { href: '/profile', label: 'Profile', roles: ['admin', 'user', 'viewer'] },
