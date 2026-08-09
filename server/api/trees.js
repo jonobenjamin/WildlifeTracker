@@ -15,7 +15,12 @@ const VALID_SPECIES = [
   'Other',
 ];
 
-const WRAPPED_STATUSES = ['Wrapped', 'To be Wrapped'];
+const WRAPPED_STATUSES = [
+  'Wrapped',
+  'To be Wrapped',
+  'Mesh damaged',
+  'Mesh fixed',
+];
 
 async function checkUserRevoked(db, userIdentifier) {
   try {
