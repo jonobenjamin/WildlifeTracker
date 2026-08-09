@@ -1,6 +1,7 @@
 const express = require('express');
 const { createFieldAuth } = require('../middleware/fieldAuth');
 const { archiveAndDelete } = require('../lib/archiveDelete');
+const { ensureStaticRoadsSeeded } = require('../lib/seedStaticRoads');
 
 const router = express.Router();
 
@@ -71,38 +72,59 @@ module.exports = (db) => {
   const validateApiKey = createFieldAuth(db);
   router.use(validateApiKey);
 
-  // GET /api/roads — all user-drawn roads for map sync
+  // GET /api/roads — all roads (static base + user segments) after one-time seed
+  // Optional ?source=user|static to filter (field PWA should use source=user)
   router.get('/', async (req, res) => {
     try {
       if (!db) {
         return res.status(503).json({ success: false, error: 'Database not available' });
       }
 
-      const snapshot = await db.collection('roads').get();
+      const seedResult = await ensureStaticRoadsSeeded(db);
+
+      const sourceFilter = String(req.query.source || '').toLowerCase().trim();
+      let snapshot;
+      if (sourceFilter === 'user' || sourceFilter === 'static') {
+        snapshot = await db.collection('roads').where('source', '==', sourceFilter).get();
+      } else {
+        snapshot = await db.collection('roads').get();
+      }
+
       const roads = [];
       snapshot.forEach((doc) => {
         const shaped = roadToClient(doc.id, doc.data());
         if (shaped) roads.push(shaped);
       });
       roads.sort((a, b) => {
+        const an = String(a.name || a.Roads || '').toLowerCase();
+        const bn = String(b.name || b.Roads || '').toLowerCase();
+        if (an !== bn) return an.localeCompare(bn);
         const ta = a.updatedAt || a.createdAt || '';
         const tb = b.updatedAt || b.createdAt || '';
         return String(tb).localeCompare(String(ta));
       });
 
-      res.json({ success: true, data: roads, count: roads.length });
+      res.json({
+        success: true,
+        data: roads,
+        count: roads.length,
+        seed: seedResult,
+      });
     } catch (error) {
       console.error('GET /api/roads error:', error);
       res.status(500).json({ success: false, error: 'Failed to fetch roads' });
     }
   });
 
-  // POST /api/roads — create a GPS-traced road
+  // POST /api/roads — create a GPS-traced road (appended to the same collection)
   router.post('/', async (req, res) => {
     try {
       if (!db) {
         return res.status(503).json({ success: false, error: 'Database not available' });
       }
+
+      // Ensure base network exists first so user roads sit alongside it.
+      await ensureStaticRoadsSeeded(db);
 
       const { name, coordinates, user, localId, createdAt } = req.body;
       const roadName = String(name || '').trim();

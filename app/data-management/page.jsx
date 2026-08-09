@@ -42,7 +42,8 @@ function itemTitle(type, item) {
 function itemSubtitle(type, item) {
   if (type === 'roads') {
     const when = item.updatedAt || item.createdAt;
-    return `${item.user || '—'} · ${when ? dayjs(when).format('DD MMM YYYY HH:mm') : '—'}`;
+    const src = (item.source || '').toLowerCase() === 'user' ? 'User' : 'Base';
+    return `${src} · ${item.user || '—'} · ${when ? dayjs(when).format('DD MMM YYYY HH:mm') : '—'}`;
   }
   if (type === 'trees') {
     const when = item.updatedAt || item.createdAt;
@@ -137,9 +138,10 @@ export default function DataManagementPage() {
       let layer;
       if (dataType === 'roads') {
         const latlngs = item.coordinates.map(([lng, lat]) => [lat, lng]);
+        const isUser = (item.source || '').toLowerCase() === 'user';
         layer = L.polyline(latlngs, {
-          color: selectedId === item.id ? '#b42318' : '#8a6d3b',
-          weight: selectedId === item.id ? 5 : 3,
+          color: selectedId === item.id ? '#b42318' : isUser ? '#1565C0' : '#8a6d3b',
+          weight: selectedId === item.id ? 5 : isUser ? 3 : 2,
           opacity: 0.9,
         });
         latlngs.forEach((ll) => bounds.push(ll));
@@ -180,9 +182,11 @@ export default function DataManagementPage() {
     Object.entries(layersById).forEach(([id, layer]) => {
       const selected = id === selectedId;
       if (layer.setStyle) {
+        const item = items.find((i) => i.id === id);
+        const isUser = (item?.source || '').toLowerCase() === 'user';
         layer.setStyle({
-          color: selected ? '#b42318' : '#8a6d3b',
-          weight: selected ? 5 : 3,
+          color: selected ? '#b42318' : isUser ? '#1565C0' : '#8a6d3b',
+          weight: selected ? 5 : isUser ? 3 : 2,
         });
       } else if (layer.setIcon) {
         const item = items.find((i) => i.id === id);
@@ -412,7 +416,7 @@ function EditModal({ dataType, item, busy, onClose, onSave }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 grid place-items-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 z-[2000] grid place-items-center p-4" onClick={onClose}>
       <div className="kpr-card w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-base font-semibold mb-4">Edit {DATA_TYPES.find((t) => t.value === dataType)?.label.slice(0, -1) || 'record'}</h3>
         <form onSubmit={submit} className="space-y-3">
@@ -572,7 +576,7 @@ function DeleteConfirmModal({ title, busy, onClose, onConfirm }) {
   const ok = typed.trim().toLowerCase() === 'delete';
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 grid place-items-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 z-[2000] grid place-items-center p-4" onClick={onClose}>
       <div className="kpr-card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-base font-semibold mb-2 text-portal-danger">Delete record</h3>
         <p className="text-sm text-portal-text-muted mb-4">

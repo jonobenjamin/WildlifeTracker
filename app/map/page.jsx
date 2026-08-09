@@ -215,9 +215,8 @@ export default function ConcessionMapPage() {
     mapObj.current.L = L;
     setMapReady({ map, L });
     try {
-      const [boundary, roads, camps, poi] = await Promise.all([
+      const [boundary, camps, poi] = await Promise.all([
         fetchGeoJson('/data/geojson/Consession_boundary.geojson'),
-        fetchGeoJson('/data/geojson/KPR_roads.geojson'),
         fetchGeoJson('/data/geojson/Camps.geojson'),
         fetchGeoJson('/data/geojson/KPR_POI.geojson').catch(() => null),
       ]);
@@ -226,17 +225,8 @@ export default function ConcessionMapPage() {
         style: { color: '#4c1918', weight: 2.5, fillOpacity: 0.03 },
       }).addTo(map);
 
-      // One Leaflet path per road feature (named in popup); user roads merged later.
-      const roadsGroup = L.layerGroup();
-      L.geoJSON(roads, {
-        style: { color: '#8a6d3b', weight: 1.5, opacity: 0.8 },
-        onEachFeature: (feature, layer) => {
-          const name = feature.properties?.Roads || feature.properties?.name;
-          if (name) layer.bindPopup(`<strong>${escapeHtml(name)}</strong>`);
-          roadsGroup.addLayer(layer);
-        },
-      });
-      mapObj.current.baseLayers.roads = roadsGroup;
+      // All roads (static base + user segments) come from /api/roads after seed.
+      mapObj.current.baseLayers.roads = L.layerGroup();
       mapObj.current.userRoadsLayer = null;
 
       mapObj.current.baseLayers.camps = L.geoJSON(camps, {
@@ -298,10 +288,9 @@ export default function ConcessionMapPage() {
       setAllObservations(obsRes.data || []);
       setAllTracking(trackRes.data || []);
 
-      const userRoads = roadsRes.data || [];
-      if (userRoads.length && mapObj.current.baseLayers.roads) {
-        const userGroup = L.layerGroup();
-        userRoads.forEach((road) => {
+      const allRoads = roadsRes.data || [];
+      if (allRoads.length && mapObj.current.baseLayers.roads) {
+        allRoads.forEach((road) => {
           const coords = road.coordinates;
           if (!Array.isArray(coords) || coords.length < 2) return;
           const latlngs = coords
@@ -309,19 +298,19 @@ export default function ConcessionMapPage() {
             .map(([lng, lat]) => [lat, lng]);
           if (latlngs.length < 2) return;
           const name = road.name || road.Roads || 'Road';
+          const isUser = (road.source || '').toLowerCase() === 'user';
           const line = L.polyline(latlngs, {
-            color: '#1565C0',
-            weight: 2.5,
-            opacity: 0.9,
+            color: isUser ? '#1565C0' : '#8a6d3b',
+            weight: isUser ? 2.5 : 1.5,
+            opacity: isUser ? 0.9 : 0.8,
           });
           line.bindPopup(
             `<strong>${escapeHtml(name)}</strong><br>` +
-              `User road${road.user ? `<br>By: ${escapeHtml(road.user)}` : ''}`
+              `${isUser ? 'User road' : 'Base road'}` +
+              `${road.user ? `<br>By: ${escapeHtml(road.user)}` : ''}`
           );
-          userGroup.addLayer(line);
+          mapObj.current.baseLayers.roads.addLayer(line);
         });
-        mapObj.current.userRoadsLayer = userGroup;
-        userGroup.eachLayer((layer) => mapObj.current.baseLayers.roads.addLayer(layer));
       }
 
       setLoading(false);
