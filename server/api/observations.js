@@ -1,9 +1,16 @@
 const express = require('express');
 const multer = require('multer');
-const admin = require('firebase-admin');
 const { getStorage } = require('firebase-admin/storage');
 const { sendObservationNotification } = require('../services/notificationServices');
-const { createFieldAuth } = require('../middleware/fieldAuth');
+const {
+  createFieldAuth,
+  resolveFirebaseAuth,
+  extractBearer,
+  acceptApiKey,
+  attachFirebaseAuth,
+  attachApiKeyAuth,
+  clearAuthIdentity,
+} = require('../middleware/fieldAuth');
 const { archiveAndDelete } = require('../lib/archiveDelete');
 
 const router = express.Router();
@@ -107,78 +114,59 @@ function isExcludedFromRecentMap(animal) {
 }
 
 /**
- * recent-map auth: valid shared API key OR Firebase ID token for an
- * active admin/guide/researcher (guests are never allowed).
+ * recent-map auth: Firebase Bearer preferred (admin/guide/researcher only).
+ * Shared API key remains as migration fallback.
  */
 async function requireRecentMapAccess(req, res, next) {
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-  if (apiKey && process.env.API_KEY && apiKey === process.env.API_KEY) {
-    req.mapAccessRole = 'admin';
-    return next();
-  }
+  clearAuthIdentity(req);
 
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  if (!token) {
-    return res.status(401).json({
-      success: false,
-      error: 'Unauthorized',
-      message: 'Sign in required to view recent sightings',
-    });
-  }
-
-  try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    let role = 'guide';
-    let status = 'active';
-
-    if (db) {
-      const userDoc = await db.collection('users').doc(decoded.uid).get();
-      if (userDoc.exists) {
-        const data = userDoc.data() || {};
-        role = String(data.role || 'guide').toLowerCase();
-        status = String(data.status || 'active').toLowerCase();
+  const token = extractBearer(req);
+  if (token) {
+    const resolved = await resolveFirebaseAuth(db, token);
+    if (resolved.ok) {
+      if (resolved.role === 'guest') {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: 'Guests cannot access recent sightings',
+        });
       }
+      if (resolved.role !== 'admin' && resolved.role !== 'guide' && resolved.role !== 'researcher') {
+        return res.status(403).json({
+          success: false,
+          error: 'Forbidden',
+          message: 'Insufficient permissions',
+        });
+      }
+      attachFirebaseAuth(req, resolved);
+      req.mapAccessRole = resolved.role;
+      req.mapAccessUid = resolved.uid;
+      return next();
     }
-
-    if (role === 'user') role = 'guide';
-    if (role === 'viewer') role = 'guest';
-
-    if (status === 'revoked') {
+    if (resolved.code === 403) {
       return res.status(403).json({
         success: false,
         error: 'Forbidden',
-        message: 'Your account has been suspended',
+        message: resolved.message,
       });
     }
-
-    if (role === 'guest') {
-      return res.status(403).json({
-        success: false,
-        error: 'Forbidden',
-        message: 'Guests cannot access recent sightings',
-      });
-    }
-
-    if (role !== 'admin' && role !== 'guide' && role !== 'researcher') {
-      return res.status(403).json({
-        success: false,
-        error: 'Forbidden',
-        message: 'Insufficient permissions',
-      });
-    }
-
-    req.mapAccessRole = role;
-    req.mapAccessUid = decoded.uid;
-    return next();
-  } catch (error) {
-    console.error('recent-map auth failed:', error.message);
-    return res.status(401).json({
-      success: false,
-      error: 'Unauthorized',
-      message: 'Invalid or expired session — please sign in again',
-    });
+    // Invalid token — fall through to API key for dual-auth / legacy clients.
   }
+
+  if (acceptApiKey(req)) {
+    attachApiKeyAuth(req);
+    req.mapAccessRole = 'admin';
+    req.mapAccessUid = null;
+    return next();
+  }
+
+  return res.status(401).json({
+    success: false,
+    error: 'Unauthorized',
+    message: token
+      ? 'Invalid or expired session — please sign in again'
+      : 'Sign in required to view recent sightings',
+  });
 }
 
 /**

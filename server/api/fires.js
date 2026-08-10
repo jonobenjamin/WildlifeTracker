@@ -1,20 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { getFireFirmsBbox, filterFiresInFireArea } = require('../services/concessionBoundary');
+const { createFieldAuth } = require('../middleware/fieldAuth');
 
 module.exports = (db) => {
-  const validateApiKey = (req, res, next) => {
-    const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-    if (!apiKey || apiKey !== process.env.API_KEY) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Valid API key required',
-      });
-    }
-    next();
-  };
-
-  router.use(validateApiKey);
+  // Phase 1: Firebase Bearer preferred; shared API_KEY as fallback.
+  router.use(createFieldAuth(db));
 
   function csvToGeoJSON(csvText, sensorFallback) {
     const text = String(csvText || '').trim();

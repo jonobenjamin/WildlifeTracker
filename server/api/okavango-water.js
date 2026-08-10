@@ -1,15 +1,12 @@
 const express = require('express');
+const { createFieldAuth } = require('../middleware/fieldAuth');
+const { getDb } = require('../firestoreDb');
+
 const router = express.Router();
 
-// Same shared key gate as the other read-only map endpoints (observations, trees, fires).
-const validateApiKey = (req, res, next) => {
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-  if (!apiKey || apiKey !== process.env.API_KEY) {
-    return res.status(401).json({ success: false, message: 'Valid API key required' });
-  }
-  next();
-};
-router.use(validateApiKey);
+// Phase 1: Firebase Bearer preferred; shared API_KEY as fallback.
+// Pass Firestore so Bearer auth can attach uid/role/status and reject revoked users.
+router.use(createFieldAuth(getDb()));
 
 function partnerConfig() {
   return {

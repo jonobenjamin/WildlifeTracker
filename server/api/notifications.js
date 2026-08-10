@@ -2,23 +2,17 @@ const express = require('express');
 const { isConfigured, sendResendEmail, buildAlertHtml } = require('../services/resendEmail');
 const { getRecipientEmailsForEvent, COLLECTION } = require('../services/notificationRules');
 const { getDb } = require('../firestoreDb');
+const { createFieldAuth } = require('../middleware/fieldAuth');
 
 const router = express.Router();
-
-function validateApiKey(req, res, next) {
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-  if (!apiKey || apiKey !== process.env.API_KEY) {
-    return res.status(401).json({ error: 'Unauthorized', message: 'Valid API key required' });
-  }
-  next();
-}
 
 /**
  * GET /api/notifications/status
  * Safe diagnostics: is Resend configured, how many rules, would a sample event match?
- * Optional: ?sendTest=1&email=you@example.com to actually send a Resend test (uses API key).
+ * Optional: ?sendTest=1&email=you@example.com to actually send a Resend test.
+ * Phase 1: Firebase Bearer preferred; shared API_KEY as fallback.
  */
-router.get('/status', validateApiKey, async (req, res) => {
+router.get('/status', createFieldAuth(getDb()), async (req, res) => {
   try {
     const db = getDb();
     let rulesCount = 0;

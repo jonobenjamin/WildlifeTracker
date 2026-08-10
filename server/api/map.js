@@ -1,25 +1,14 @@
 const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
+const { createFieldAuth } = require('../middleware/fieldAuth');
+const { getDb } = require('../firestoreDb');
 
 const router = express.Router();
 
-// Middleware to validate API key (simple authentication)
-const validateApiKey = (req, res, next) => {
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-
-  if (!apiKey || apiKey !== process.env.API_KEY) {
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Valid API key required'
-    });
-  }
-
-  next();
-};
-
-// Apply API key validation to all routes
-router.use(validateApiKey);
+// Phase 1: Firebase Bearer preferred; shared API_KEY as fallback.
+// Pass Firestore so Bearer auth can attach uid/role/status and reject revoked users.
+router.use(createFieldAuth(getDb()));
 
 // GET /api/map/boundary - Get concession boundary GeoJSON
 router.get('/boundary', async (req, res) => {

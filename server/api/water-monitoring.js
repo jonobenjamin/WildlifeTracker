@@ -1,4 +1,6 @@
 const express = require('express');
+const { createFieldAuth } = require('../middleware/fieldAuth');
+
 const router = express.Router();
 
 // Check if user is revoked
@@ -69,24 +71,9 @@ async function checkUserRevoked(db, userIdentifier) {
   }
 }
 
-// Middleware to validate API key (simple authentication)
-const validateApiKey = (req, res, next) => {
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-
-  if (!apiKey || apiKey !== process.env.API_KEY) {
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Valid API key required'
-    });
-  }
-
-  next();
-};
-
-// Apply API key validation to all routes
-router.use(validateApiKey);
-
 module.exports = (db) => {
+  // Phase 1: Firebase Bearer preferred; shared API_KEY as fallback.
+  router.use(createFieldAuth(db));
 
 // GET /api/water-monitoring - Fetch water monitoring data
 router.get('/', async (req, res) => {
