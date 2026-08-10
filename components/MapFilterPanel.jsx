@@ -199,7 +199,7 @@ export default function MapFilterPanel({
       {(viewMode === 'vehicle' || viewMode === 'patrol') && (
         <p className="text-xs text-portal-text-muted leading-relaxed">
           {viewMode === 'vehicle'
-            ? 'Shows recorded vehicle trips as coloured track lines, or as a heat map of GPS points (Hotspots).'
+            ? 'Shows recorded vehicle trips as coloured track lines, or as a density heat map (Hotspots) where colour strength reflects how many trips pass the same place.'
             : 'Shows recorded patrol trips as coloured track lines. Open the map legend for walker colours.'}
         </p>
       )}
@@ -208,8 +208,8 @@ export default function MapFilterPanel({
         <div>
           <h4 className="kpr-label">Display Mode</h4>
           <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
-            <span className={`text-xs font-semibold ${displayMode === 'actual' ? 'text-portal-text' : 'text-portal-text-muted'}`}>
-              Actual
+            <span className={`text-xs font-semibold ${displayMode === 'hotspot' ? 'text-portal-text' : 'text-portal-text-muted'}`}>
+              Hotspots
             </span>
             <span
               role="switch"
@@ -220,11 +220,11 @@ export default function MapFilterPanel({
             >
               <span
                 className="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform"
-                style={{ transform: displayMode === 'hotspot' ? 'translateX(20px)' : 'translateX(0)' }}
+                style={{ transform: displayMode === 'hotspot' ? 'translateX(0)' : 'translateX(20px)' }}
               />
             </span>
-            <span className={`text-xs font-semibold ${displayMode === 'hotspot' ? 'text-portal-text' : 'text-portal-text-muted'}`}>
-              Hotspots
+            <span className={`text-xs font-semibold ${displayMode === 'actual' ? 'text-portal-text' : 'text-portal-text-muted'}`}>
+              Actual
             </span>
           </label>
         </div>

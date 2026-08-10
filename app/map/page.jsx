@@ -186,13 +186,23 @@ export default function ConcessionMapPage() {
     const params = new URLSearchParams(window.location.search);
     const view = params.get('view');
     const allowed = ['sightings', 'trees', 'maintenance', 'incidents', 'vehicle', 'patrol', 'water-quality', 'water-monitoring', 'fires'];
-    if (view && allowed.includes(view)) setViewMode(view);
+    if (view && allowed.includes(view)) {
+      setViewMode(view);
+      if (view === 'vehicle') setDisplayMode('hotspot');
+    }
     const lat = parseFloat(params.get('lat'));
     const lng = parseFloat(params.get('lng'));
     const id = params.get('id');
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
       setFocusTarget({ lat, lng, id });
     }
+  }, []);
+
+  const handleViewModeChange = useCallback((mode) => {
+    setViewMode(mode);
+    // Vehicle defaults to density hotspots; other modes use actual markers/lines.
+    if (mode === 'vehicle') setDisplayMode('hotspot');
+    else setDisplayMode('actual');
   }, []);
 
   const applyBaseVisibility = useCallback(() => {
@@ -467,13 +477,21 @@ export default function ConcessionMapPage() {
         if (viewMode === 'vehicle' && displayMode === 'hotspot') {
           await ensureHeatPlugin(L);
           if (cancelled) return;
-          const points = trackVerticesAsHeatPoints(filtered);
+          const { points, max } = trackVerticesAsHeatPoints(filtered);
           if (points.length > 0) {
             mapObj.current.activeLayer = L.heatLayer(points, {
-              radius: 22,
-              blur: 16,
-              maxZoom: 17,
-              minOpacity: 0.45,
+              radius: 28,
+              blur: 22,
+              maxZoom: 16,
+              minOpacity: 0.15,
+              max,
+              gradient: {
+                0.2: '#3b82f6',
+                0.45: '#22c55e',
+                0.7: '#eab308',
+                0.9: '#f97316',
+                1.0: '#dc2626',
+              },
             }).addTo(map);
             try {
               map.fitBounds(points.map(([lat, lng]) => [lat, lng]), { padding: [24, 24], maxZoom: 15 });
@@ -640,7 +658,7 @@ export default function ConcessionMapPage() {
 
         <MapFilterPanel
           viewMode={viewMode}
-          onViewModeChange={setViewMode}
+          onViewModeChange={handleViewModeChange}
           dateStart={dateStart}
           dateEnd={dateEnd}
           onDateStartChange={setDateStart}
