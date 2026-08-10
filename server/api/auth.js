@@ -101,7 +101,7 @@ router.post('/login', async (req, res) => {
       success: true,
       customToken,
       name: data.name,
-      role: (data.role || 'user').toString().toLowerCase(),
+      role: (data.role || 'guide').toString().toLowerCase(),
       email: data.email || null,
     });
   } catch (error) {
@@ -494,7 +494,7 @@ router.post('/verify-pin', async (req, res) => {
     }
 
     const existing = userSnap.exists ? userSnap.data() || {} : {};
-    const role = (existing.role || 'viewer').toString().toLowerCase();
+    const role = (existing.role || 'guest').toString().toLowerCase();
     await userRef.set(
       {
         uid,

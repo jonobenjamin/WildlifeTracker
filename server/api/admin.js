@@ -133,8 +133,8 @@ router.post('/users', requireAdmin, async (req, res) => {
       });
     }
 
-    const validRoles = ['admin', 'user', 'viewer'];
-    const userRole = validRoles.includes(role) ? role : 'user';
+    const validRoles = ['admin', 'guide', 'guest', 'researcher'];
+    const userRole = validRoles.includes(role) ? role : 'guide';
 
     const db = getDb();
     const isEmail = identifier.includes('@');
@@ -222,7 +222,7 @@ router.patch('/users/:userId', requireAdmin, async (req, res) => {
     }
 
     if (role !== undefined) {
-      const validRoles = ['admin', 'user', 'viewer'];
+      const validRoles = ['admin', 'guide', 'guest', 'researcher'];
       if (validRoles.includes(role)) {
         updates.role = role;
       }

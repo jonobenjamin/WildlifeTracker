@@ -1,5 +1,7 @@
 'use client';
 
+import { allowedMapViews } from '@/lib/roles';
+
 const MONTHS = [
   ['01', 'January'],
   ['02', 'February'],
@@ -54,6 +56,7 @@ const WATER_PARAMS = [
 const VIEW_LABELS = { sightings: 'Sightings', maintenance: 'Maintenance', incidents: 'Incidents' };
 
 export default function MapFilterPanel({
+  role,
   viewMode,
   onViewModeChange,
   dateStart,
@@ -94,6 +97,8 @@ export default function MapFilterPanel({
   const showDisplayModeSwitch = viewMode === 'sightings' || viewMode === 'trees' || viewMode === 'vehicle';
   const showRecentToggle = ['sightings', 'maintenance', 'incidents'].includes(viewMode);
   const showStat = ['sightings', 'trees', 'maintenance', 'incidents', 'vehicle', 'patrol'].includes(viewMode);
+  const allowedViews = allowedMapViews(role);
+  const viewModes = allowedViews === null ? VIEW_MODES : VIEW_MODES.filter((v) => allowedViews.includes(v.value));
 
   return (
     <div
@@ -105,7 +110,7 @@ export default function MapFilterPanel({
       <div>
         <h4 className="kpr-label">View Mode</h4>
         <select className="kpr-input" value={viewMode} onChange={(e) => onViewModeChange(e.target.value)}>
-          {VIEW_MODES.map((v) => (
+          {viewModes.map((v) => (
             <option key={v.value} value={v.value}>
               {v.label}
             </option>

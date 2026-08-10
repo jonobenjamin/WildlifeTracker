@@ -11,6 +11,7 @@ import {
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebase/client';
 import { apiUrl } from './api';
+import { canAccessWeb, homePathForRole, normalizeRole } from './roles';
 
 const AuthContext = createContext(null);
 
@@ -20,7 +21,7 @@ function profileFromDoc(uid, data = {}) {
     name: data.name || '',
     email: data.email || '',
     phone: data.phone || '',
-    role: data.role || 'viewer',
+    role: normalizeRole(data.role),
     status: data.status || 'active',
   };
 }
@@ -33,7 +34,6 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!auth) {
-      // SSR / missing client Firebase — mark ready so pages can render
       setReady(true);
       return undefined;
     }
@@ -53,8 +53,12 @@ export function AuthProvider({ children }) {
           const data = snap.data();
           const next = profileFromDoc(u.uid, data);
           setProfile(next);
-          setRole(data.status === 'revoked' ? null : data.role || 'viewer');
-          // Keep Auth displayName in sync so other Firebase clients see the name too
+          // Guests (and revoked) have no web portal role session.
+          if (data.status === 'revoked' || !canAccessWeb(next.role)) {
+            setRole(null);
+          } else {
+            setRole(next.role);
+          }
           if (next.name && u.displayName !== next.name) {
             updateProfile(u, { displayName: next.name }).catch(() => {});
           }
@@ -64,11 +68,11 @@ export function AuthProvider({ children }) {
             name: u.displayName || '',
             email: u.email || '',
             phone: u.phoneNumber || '',
-            role: 'viewer',
+            role: 'guest',
             status: 'active',
           };
           setProfile(fallback);
-          setRole('viewer');
+          setRole(null);
         }
       } catch (e) {
         console.error('Failed to resolve profile:', e);
@@ -77,10 +81,10 @@ export function AuthProvider({ children }) {
           name: u.displayName || '',
           email: u.email || '',
           phone: u.phoneNumber || '',
-          role: 'viewer',
+          role: 'guest',
           status: 'active',
         });
-        setRole('viewer');
+        setRole(null);
       }
       setReady(true);
     });
@@ -88,15 +92,16 @@ export function AuthProvider({ children }) {
   }, []);
 
   const applyLoginProfile = useCallback((data) => {
-    const nextRole = data?.role ? String(data.role).toLowerCase() : null;
-    if (nextRole) setRole(nextRole);
+    const nextRole = data?.role ? normalizeRole(data.role) : null;
+    if (nextRole && canAccessWeb(nextRole)) setRole(nextRole);
+    else setRole(null);
     if (data?.name || data?.email || data?.role) {
       setProfile((prev) => ({
         uid: auth?.currentUser?.uid || prev?.uid || '',
         name: data.name || prev?.name || '',
         email: data.email || prev?.email || '',
         phone: prev?.phone || '',
-        role: nextRole || prev?.role || 'viewer',
+        role: nextRole || prev?.role || 'guest',
         status: 'active',
       }));
     }
@@ -111,13 +116,17 @@ export function AuthProvider({ children }) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Login failed');
+    const normalized = { ...data, role: normalizeRole(data.role) };
+    if (!canAccessWeb(normalized.role)) {
+      throw new Error('This account is for the field app only and cannot access the web portal.');
+    }
     await signInWithCustomToken(auth, data.customToken);
     if (auth.currentUser && data.name) {
       await updateProfile(auth.currentUser, { displayName: data.name }).catch(() => {});
     }
-    applyLoginProfile(data);
-    await syncUserDoc(data);
-    return data;
+    applyLoginProfile(normalized);
+    await syncUserDoc(normalized);
+    return normalized;
   }, [applyLoginProfile]);
 
   const requestPin = useCallback(async (email, name) => {
@@ -140,13 +149,17 @@ export function AuthProvider({ children }) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || 'Invalid PIN');
+    const normalized = { ...data, role: normalizeRole(data.role), email };
+    if (!canAccessWeb(normalized.role)) {
+      throw new Error('This account is for the field app only and cannot access the web portal.');
+    }
     await signInWithCustomToken(auth, data.customToken);
     if (auth.currentUser && data.name) {
       await updateProfile(auth.currentUser, { displayName: data.name }).catch(() => {});
     }
-    applyLoginProfile({ ...data, email });
-    await syncUserDoc({ ...data, email });
-    return data;
+    applyLoginProfile(normalized);
+    await syncUserDoc(normalized);
+    return normalized;
   }, [applyLoginProfile]);
 
   const signOut = useCallback(async () => {
@@ -169,7 +182,7 @@ async function syncUserDoc(data) {
     const userRef = doc(db, 'users', user.uid);
     const snap = await getDoc(userRef);
     const prev = snap.exists() ? snap.data() : {};
-    const role = (data.role || prev.role || 'viewer').toString().toLowerCase();
+    const role = normalizeRole(data.role || prev.role);
     await setDoc(
       userRef,
       {
@@ -196,23 +209,27 @@ export function useAuth() {
 }
 
 /**
- * Client-side route guard. Redirects to /login if unauthenticated, or to
- * the viewer map if the signed-in role isn't in `allow`.
+ * Client-side route guard. Redirects to /login if unauthenticated / no web role,
+ * or to the role home page if the signed-in role isn't in `allow`.
  */
 export function useRequireRole(allow) {
-  const { user, profile, role, ready } = useAuth();
+  const { user, profile, role, ready, signOut } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!ready) return;
     if (!user || !role) {
+      // Guest sessions: sign out of web auth so they don't bounce forever.
+      if (user && !role) {
+        signOut?.().catch(() => {});
+      }
       router.replace('/login');
       return;
     }
     if (allow && !allow.includes(role)) {
-      router.replace('/map-users');
+      router.replace(homePathForRole(role));
     }
-  }, [ready, user, role, allow, router]);
+  }, [ready, user, role, allow, router, signOut]);
 
   return {
     user,

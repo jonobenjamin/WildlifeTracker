@@ -17,6 +17,7 @@ import { buildTrackLayer, trackColor, trackLabel, trackVerticesAsHeatPoints } fr
 import { addHomeZoomControl } from '@/lib/homeZoomControl';
 import { attachWeatherPopup } from '@/lib/weather';
 import { loadRoadsDataset } from '@/lib/roadsDataset';
+import { isMapViewAllowed, allowedMapViews } from '@/lib/roles';
 
 const HOME_CAMPS = ['tau camp', 'little sable camp'];
 const HOME_FIT = { padding: [60, 60], maxZoom: 13 };
@@ -63,7 +64,7 @@ function escapeHtml(str) {
 }
 
 export default function ConcessionMapPage() {
-  const { authorized } = useRequireRole(['admin']);
+  const { authorized, role } = useRequireRole(['admin', 'guide', 'researcher']);
   const { user } = useAuth();
   const mapObj = useRef({
     map: null,
@@ -187,8 +188,10 @@ export default function ConcessionMapPage() {
     const view = params.get('view');
     const allowed = ['sightings', 'trees', 'maintenance', 'incidents', 'vehicle', 'patrol', 'water-quality', 'water-monitoring', 'fires'];
     if (view && allowed.includes(view)) {
-      setViewMode(view);
-      if (view === 'vehicle') setDisplayMode('hotspot');
+      if (!role || isMapViewAllowed(role, view)) {
+        setViewMode(view);
+        if (view === 'vehicle') setDisplayMode('hotspot');
+      }
     }
     const lat = parseFloat(params.get('lat'));
     const lng = parseFloat(params.get('lng'));
@@ -196,14 +199,28 @@ export default function ConcessionMapPage() {
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
       setFocusTarget({ lat, lng, id });
     }
-  }, []);
+  }, [role]);
 
-  const handleViewModeChange = useCallback((mode) => {
-    setViewMode(mode);
-    // Vehicle defaults to density hotspots; other modes use actual markers/lines.
-    if (mode === 'vehicle') setDisplayMode('hotspot');
-    else setDisplayMode('actual');
-  }, []);
+  const handleViewModeChange = useCallback(
+    (mode) => {
+      if (!isMapViewAllowed(role, mode)) return;
+      setViewMode(mode);
+      // Vehicle defaults to density hotspots; other modes use actual markers/lines.
+      if (mode === 'vehicle') setDisplayMode('hotspot');
+      else setDisplayMode('actual');
+    },
+    [role]
+  );
+
+  // Keep view mode within what this role is allowed to see.
+  useEffect(() => {
+    if (!role) return;
+    if (!isMapViewAllowed(role, viewMode)) {
+      const allowed = allowedMapViews(role);
+      setViewMode(allowed?.[0] || 'sightings');
+      setDisplayMode('actual');
+    }
+  }, [role, viewMode]);
 
   const applyBaseVisibility = useCallback(() => {
     const { map, baseLayers } = mapObj.current;
@@ -657,6 +674,7 @@ export default function ConcessionMapPage() {
         </div>
 
         <MapFilterPanel
+          role={role}
           viewMode={viewMode}
           onViewModeChange={handleViewModeChange}
           dateStart={dateStart}

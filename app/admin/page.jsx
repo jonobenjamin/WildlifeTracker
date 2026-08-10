@@ -7,9 +7,10 @@ import { useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
 import { listUsers, createUser, updateUser, setUserStatus, deleteUser } from '@/lib/actions/adminUsers';
 import ConfigureNotifications from '@/components/ConfigureNotifications';
+import { ROLE_OPTIONS, VALID_ROLES, labelForRole, normalizeRole } from '@/lib/roles';
 import dayjs from 'dayjs';
 
-const ROLES = ['admin', 'user', 'viewer'];
+const ROLES = VALID_ROLES;
 const MONTHS = [
   ['01', 'January'],
   ['02', 'February'],
@@ -222,7 +223,7 @@ export default function AdminPage() {
                           </Link>
                         </td>
                         <td className="px-3 py-2.5">{u.email || u.phone || '—'}</td>
-                        <td className="px-3 py-2.5 capitalize">{u.role}</td>
+                        <td className="px-3 py-2.5">{labelForRole(u.role)}</td>
                         <td className="px-3 py-2.5">
                           <span
                             className={`kpr-badge ${
@@ -307,7 +308,7 @@ function UserModal({ initial, onClose, onSave }) {
   const [name, setName] = useState(initial?.name || '');
   const [email, setEmail] = useState(initial?.email || '');
   const [phone, setPhone] = useState(initial?.phone || '');
-  const [role, setRole] = useState(initial?.role || 'user');
+  const [role, setRole] = useState(normalizeRole(initial?.role || 'guide'));
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -381,9 +382,9 @@ function UserModal({ initial, onClose, onSave }) {
           <div>
             <label className="kpr-label">Role</label>
             <select className="kpr-input" value={role} onChange={(e) => setRole(e.target.value)}>
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {r}
+              {ROLE_OPTIONS.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
                 </option>
               ))}
             </select>

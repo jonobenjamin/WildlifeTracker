@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { useRequireRole, useAuth } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
+import { labelForRole } from '@/lib/roles';
 import dayjs from 'dayjs';
 
 export default function ProfilePage() {
-  const { authorized } = useRequireRole(['admin', 'user', 'viewer']);
+  const { authorized } = useRequireRole(['admin', 'guide', 'researcher']);
   const { user, profile, role } = useAuth();
 
   const [loading, setLoading] = useState(true);
@@ -104,7 +105,7 @@ export default function ProfilePage() {
             </div>
             <div>
               <dt className="text-portal-text-muted">Role</dt>
-              <dd className="font-medium capitalize">{role || profile?.role || '—'}</dd>
+              <dd className="font-medium">{labelForRole(role || profile?.role) || '—'}</dd>
             </div>
             <div>
               <dt className="text-portal-text-muted">Status</dt>

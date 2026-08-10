@@ -108,7 +108,7 @@ function isExcludedFromRecentMap(animal) {
 
 /**
  * recent-map auth: valid shared API key OR Firebase ID token for an
- * active admin/user (viewers are never allowed).
+ * active admin/guide/researcher (guests are never allowed).
  */
 async function requireRecentMapAccess(req, res, next) {
   const apiKey = req.headers['x-api-key'] || req.query.apiKey;
@@ -129,17 +129,20 @@ async function requireRecentMapAccess(req, res, next) {
 
   try {
     const decoded = await admin.auth().verifyIdToken(token);
-    let role = 'user';
+    let role = 'guide';
     let status = 'active';
 
     if (db) {
       const userDoc = await db.collection('users').doc(decoded.uid).get();
       if (userDoc.exists) {
         const data = userDoc.data() || {};
-        role = String(data.role || 'user').toLowerCase();
+        role = String(data.role || 'guide').toLowerCase();
         status = String(data.status || 'active').toLowerCase();
       }
     }
+
+    if (role === 'user') role = 'guide';
+    if (role === 'viewer') role = 'guest';
 
     if (status === 'revoked') {
       return res.status(403).json({
@@ -149,15 +152,15 @@ async function requireRecentMapAccess(req, res, next) {
       });
     }
 
-    if (role === 'viewer') {
+    if (role === 'guest') {
       return res.status(403).json({
         success: false,
         error: 'Forbidden',
-        message: 'Viewers cannot access recent sightings',
+        message: 'Guests cannot access recent sightings',
       });
     }
 
-    if (role !== 'admin' && role !== 'user') {
+    if (role !== 'admin' && role !== 'guide' && role !== 'researcher') {
       return res.status(403).json({
         success: false,
         error: 'Forbidden',

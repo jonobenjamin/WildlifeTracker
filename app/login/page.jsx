@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/authContext';
+import { homePathForRole } from '@/lib/roles';
 
 const STEPS = { PASSWORD: 'password', FORGOT: 'forgot', PIN: 'pin' };
 
@@ -22,7 +23,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (ready && user && role) {
-      router.replace(role === 'admin' ? '/map' : '/map-users');
+      router.replace(homePathForRole(role));
     }
   }, [ready, user, role, router]);
 

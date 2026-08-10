@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/authContext';
+import { homePathForRole } from '@/lib/roles';
 
 export default function RootRedirect() {
   const { user, role, ready } = useAuth();
@@ -12,10 +13,8 @@ export default function RootRedirect() {
     if (!ready) return;
     if (!user || !role) {
       router.replace('/login');
-    } else if (role === 'admin') {
-      router.replace('/map');
     } else {
-      router.replace('/map-users');
+      router.replace(homePathForRole(role));
     }
   }, [ready, user, role, router]);
 

@@ -5,15 +5,16 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { useAuth } from '@/lib/authContext';
+import { normalizeRole } from '@/lib/roles';
 
 const NAV_ITEMS = [
-  { href: '/map', label: 'Concession Map', roles: ['admin'] },
-  { href: '/map-users', label: 'Wildlife Map', roles: ['admin', 'user', 'viewer'] },
+  { href: '/map', label: 'Concession Map', roles: ['admin', 'guide', 'researcher'] },
+  { href: '/map-users', label: 'Wildlife Map', roles: ['admin'] },
   { href: '/admin', label: 'Admin', roles: ['admin'] },
   { href: '/data-management', label: 'Data Management', roles: ['admin'] },
   { href: '/reports', label: 'Reporting', roles: ['admin'] },
   { href: '/vehicles', label: 'Vehicle Tracker', roles: ['admin'] },
-  { href: '/profile', label: 'Profile', roles: ['admin', 'user', 'viewer'] },
+  { href: '/profile', label: 'Profile', roles: ['admin', 'guide', 'researcher'] },
 ];
 
 function initialsFromLabel(label) {
@@ -31,8 +32,12 @@ export default function AppShell({ title, children, sidebarBottom = null }) {
   const pathname = usePathname();
   const { user, profile, role, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const normalized = role ? normalizeRole(role) : null;
 
-  const items = useMemo(() => NAV_ITEMS.filter((i) => !role || i.roles.includes(role)), [role]);
+  const items = useMemo(
+    () => NAV_ITEMS.filter((i) => !normalized || i.roles.includes(normalized)),
+    [normalized]
+  );
   const label =
     profile?.name ||
     user?.displayName ||

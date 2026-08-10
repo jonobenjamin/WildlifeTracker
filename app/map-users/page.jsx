@@ -9,7 +9,7 @@ import { apiFetch } from '@/lib/api';
 import { divIcon, fetchGeoJson, lodgeIcon } from '@/lib/mapIcons';
 
 export default function WildlifeMapPage() {
-  const { authorized } = useRequireRole(['admin', 'user', 'viewer']);
+  const { authorized } = useRequireRole(['admin']);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [count, setCount] = useState(0);
