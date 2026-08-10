@@ -11,6 +11,14 @@ const {
   attachApiKeyAuth,
   clearAuthIdentity,
 } = require('../middleware/fieldAuth');
+const {
+  filterObservationsForRead,
+  assertCanReadObservation,
+  canReadObservation,
+  assertCanMutateObservation,
+  resolveCreatedByUidForCreate,
+  deletedByFromAuth,
+} = require('../lib/rbac');
 const { archiveAndDelete } = require('../lib/archiveDelete');
 
 const router = express.Router();
@@ -102,20 +110,10 @@ module.exports = (db) => {
 // Accept shared API key OR signed-in Firebase session (field PWA).
 const validateApiKey = createFieldAuth(db);
 
-// Animals that must never appear on the public field-map "recent sightings" layer.
-const RECENT_MAP_EXCLUDED_ANIMALS = ['pangolin', 'rhino'];
-
-function isExcludedFromRecentMap(animal) {
-  const a = String(animal || '').toLowerCase().trim();
-  if (!a) return false;
-  return RECENT_MAP_EXCLUDED_ANIMALS.some(
-    (blocked) => a === blocked || a.includes(blocked)
-  );
-}
-
 /**
  * recent-map auth: Firebase Bearer preferred (admin/guide/researcher only).
- * Shared API key remains as migration fallback.
+ * Shared API key remains as migration fallback (field-equivalent, not admin).
+ * Guests cannot use this endpoint.
  */
 async function requireRecentMapAccess(req, res, next) {
   clearAuthIdentity(req);
@@ -155,7 +153,8 @@ async function requireRecentMapAccess(req, res, next) {
 
   if (acceptApiKey(req)) {
     attachApiKeyAuth(req);
-    req.mapAccessRole = 'admin';
+    // Migration fallback: same privilege tier as guide/researcher reads — not admin.
+    req.mapAccessRole = 'guide';
     req.mapAccessUid = null;
     return next();
   }
@@ -171,8 +170,8 @@ async function requireRecentMapAccess(req, res, next) {
 
 /**
  * GET /api/observations/recent-map
- * Sightings from the past 3 days for the field PWA map.
- * Never returns Pangolin or Rhino. Viewers cannot access this endpoint.
+ * Sightings from the past 3 days for the field PWA map (product: sightings layer).
+ * Rhino/Pangolin are allowed when they are sightings. Guests cannot access.
  * Registered before the global API-key middleware so field users can use
  * their Firebase session (the shared API key is often rotated independently).
  */
@@ -196,14 +195,14 @@ router.get('/recent-map', requireRecentMapAccess, async (req, res) => {
     const observations = [];
     snapshot.forEach((doc) => {
       const data = doc.data() || {};
+      // Field map layer is sightings-only by product design (not species ACL).
       if (String(data.category || '').toLowerCase() !== 'sighting') return;
       if (data.latitude === undefined || data.longitude === undefined) return;
-      if (isExcludedFromRecentMap(data.animal)) return;
 
       const ts = data.timestamp ? new Date(data.timestamp) : null;
       if (!ts || Number.isNaN(ts.getTime()) || ts < cutoff) return;
 
-      observations.push({
+      const row = {
         id: doc.id,
         category: 'Sighting',
         animal: data.animal,
@@ -213,7 +212,11 @@ router.get('/recent-map', requireRecentMapAccess, async (req, res) => {
         longitude: Number(data.longitude),
         timestamp: data.timestamp,
         user: data.user || null,
-      });
+        createdByUid: data.createdByUid || data.created_by_uid || null,
+      };
+      // Defense in depth: apply same READ ACL as GET / (apiKey/guide/researcher OK).
+      if (!canReadObservation(req, row)) return;
+      observations.push(row);
     });
 
     res.json({
@@ -234,7 +237,7 @@ router.get('/recent-map', requireRecentMapAccess, async (req, res) => {
 // Apply API key validation to remaining routes
 router.use(validateApiKey);
 
-// GET /api/observations - Fetch observations for map display (READ-ONLY with location data only)
+// GET /api/observations - Fetch observations (RBAC-filtered server-side)
 router.get('/', async (req, res) => {
   try {
     // Check if Firebase is initialized
@@ -246,7 +249,11 @@ router.get('/', async (req, res) => {
       });
     }
 
-    console.log('GET /api/observations requested for map display');
+    console.log('GET /api/observations requested', {
+      authMethod: req.authMethod,
+      authRole: req.authRole || null,
+      authUid: req.authUid ? String(req.authUid).slice(0, 8) + '…' : null,
+    });
 
     // Fetch observations from Firestore
     const snapshot = await db.collection('observations')
@@ -269,13 +276,17 @@ router.get('/', async (req, res) => {
       }
     });
 
-    console.log(`Successfully fetched ${observations.length} observations with location data`);
+    const filtered = filterObservationsForRead(req, observations);
+
+    console.log(
+      `Successfully fetched ${filtered.length}/${observations.length} observations with location data (RBAC)`
+    );
 
     res.json({
       success: true,
       message: 'Observations fetched successfully',
-      data: observations,
-      count: observations.length
+      data: filtered,
+      count: filtered.length
     });
 
   } catch (error) {
@@ -337,12 +348,17 @@ router.post('/', upload.single('image'), async (req, res) => {
 
     console.log('📝 New observation submission:');
     console.log('   - Category:', category);
-    console.log('   - User identifier:', user);
-    console.log('   - User type:', typeof user);
+    console.log('   - Auth method:', req.authMethod);
+    console.log('   - Auth UID:', req.authUid ? String(req.authUid).slice(0, 8) + '…' : null);
+    console.log('   - Display user field:', user);
 
-    // Check if user is revoked before allowing submission
-    if (user) {
-      console.log('🛡️ Checking user revocation status...');
+    // Revocation: Firebase sessions are already blocked in fieldAuth when status=revoked.
+    // For API-key legacy posts, keep a best-effort check on the display user label only
+    // (not used for ownership). Prefer authUid when Firebase is present.
+    if (req.authMethod === 'firebase' && req.authUid) {
+      // Identity is verified; revoked users never reach here via fieldAuth.
+    } else if (user) {
+      console.log('🛡️ Checking user revocation status (legacy API-key path)...');
       const isRevoked = await checkUserRevoked(db, user);
       if (isRevoked) {
         console.log('🚫 BLOCKED: Revoked user attempted to submit observation');
@@ -352,9 +368,6 @@ router.post('/', upload.single('image'), async (req, res) => {
           message: 'Your account has been suspended. Please contact an administrator.'
         });
       }
-      console.log('✅ User is active - allowing submission');
-    } else {
-      console.log('⚠️ No user identifier in submission - allowing (might be anonymous)');
     }
 
     // Validate required fields
@@ -398,11 +411,15 @@ router.post('/', upload.single('image'), async (req, res) => {
       }
     }
 
+    // Ownership from verified Firebase only — never from body.createdByUid / body.uid.
+    const createdByUid = resolveCreatedByUidForCreate(req);
+
     const observationData = {
       category,
       timestamp: timestamp || new Date().toISOString(),
       synced: true,
-      user: user // Add user information
+      user: user, // display/name label only — not authoritative for auth
+      createdByUid,
     };
 
     // Add category-specific data (all fields from app)
@@ -550,7 +567,7 @@ router.post('/', upload.single('image'), async (req, res) => {
   }
 });
 
-// PATCH /api/observations/:id — update attributes (Data Management)
+// PATCH /api/observations/:id — update attributes (Data Management / owner)
 router.patch('/:id', async (req, res) => {
   try {
     if (!db) {
@@ -561,6 +578,11 @@ router.patch('/:id', async (req, res) => {
     const snap = await ref.get();
     if (!snap.exists) {
       return res.status(404).json({ success: false, error: 'Observation not found' });
+    }
+
+    const existing = snap.data() || {};
+    if (!assertCanMutateObservation(req, res, existing)) {
+      return;
     }
 
     const allowed = [
@@ -581,6 +603,7 @@ router.patch('/:id', async (req, res) => {
       'latitude',
       'longitude',
     ];
+    // createdByUid / created_by_uid / role / status / uid are intentionally NOT allowed.
     const updates = { updatedAt: new Date().toISOString() };
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
@@ -609,12 +632,17 @@ router.delete('/:id', async (req, res) => {
       return res.status(503).json({ success: false, error: 'Database not available' });
     }
     const { id } = req.params;
-    const deletedBy = req.body?.deletedBy || req.query?.deletedBy || 'unknown';
     const snap = await db.collection('observations').doc(id).get();
     if (!snap.exists) {
       return res.status(404).json({ success: false, error: 'Observation not found' });
     }
-    const category = String(snap.data()?.category || '').toLowerCase();
+    const existing = snap.data() || {};
+    if (!assertCanMutateObservation(req, res, existing)) {
+      return;
+    }
+
+    const deletedBy = deletedByFromAuth(req);
+    const category = String(existing.category || '').toLowerCase();
     const dataType = category === 'incident' ? 'incidents' : category === 'maintenance' ? 'maintenance' : 'sightings';
     const result = await archiveAndDelete(db, {
       collection: 'observations',
@@ -653,6 +681,10 @@ router.get('/:id/image', async (req, res) => {
     }
 
     const observationData = doc.data();
+    if (!assertCanReadObservation(req, res, observationData)) {
+      return;
+    }
+
     if (!observationData.image_path) {
       return res.status(404).json({
         success: false,
