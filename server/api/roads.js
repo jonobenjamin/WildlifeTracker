@@ -1,6 +1,13 @@
 const express = require('express');
 const { createFieldAuth } = require('../middleware/fieldAuth');
 const { archiveAndDelete } = require('../lib/archiveDelete');
+const {
+  filterTreesOrRoadsForRead,
+  assertCanMutateRoad,
+  resolveCreatedByUidForCreate,
+  deletedByFromAuth,
+  isStaticRoad,
+} = require('../lib/rbac');
 
 const router = express.Router();
 
@@ -103,7 +110,8 @@ module.exports = (db) => {
         const shaped = roadToClient(doc.id, doc.data());
         if (shaped) roads.push(shaped);
       });
-      roads.sort((a, b) => {
+      const filtered = filterTreesOrRoadsForRead(req, roads);
+      filtered.sort((a, b) => {
         const an = String(a.name || a.Roads || '').toLowerCase();
         const bn = String(b.name || b.Roads || '').toLowerCase();
         if (an !== bn) return an.localeCompare(bn);
@@ -116,8 +124,8 @@ module.exports = (db) => {
 
       res.json({
         success: true,
-        data: roads,
-        count: roads.length,
+        data: filtered,
+        count: filtered.length,
         hiddenStaticIds,
       });
     } catch (error) {
@@ -145,23 +153,27 @@ module.exports = (db) => {
       }
 
       if (user) {
-        const isRevoked = await checkUserRevoked(db, user);
-        if (isRevoked) {
-          return res.status(403).json({
-            success: false,
-            error: 'Access denied',
-            message: 'Your account has been suspended.',
-          });
+        if (req.authMethod !== 'firebase') {
+          const isRevoked = await checkUserRevoked(db, user);
+          if (isRevoked) {
+            return res.status(403).json({
+              success: false,
+              error: 'Access denied',
+              message: 'Your account has been suspended.',
+            });
+          }
         }
       }
 
       const now = new Date().toISOString();
+      const createdByUid = resolveCreatedByUidForCreate(req);
       // Store coordinates as JSON string — Firestore rejects nested arrays.
       const doc = {
         name: roadName,
         Roads: roadName,
         coordinates: JSON.stringify(coords),
-        user: user || null,
+        user: user || null, // display label only
+        createdByUid,
         localId: localId || null,
         source: 'user',
         createdAt: createdAt || now,
@@ -204,11 +216,34 @@ module.exports = (db) => {
         }
         const source =
           req.body.source || (String(id).startsWith('static_') ? 'static' : 'user');
+        const provisional = { source };
+
+        // Upsert-create: static/system → admin only; user roads → any Firebase user;
+        // API key cannot PATCH (including upsert).
+        if (req.authMethod === 'apiKey') {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: 'API key cannot modify or delete roads',
+          });
+        }
+        if (isStaticRoad(id, provisional)) {
+          if (!assertCanMutateRoad(req, res, provisional, id)) return;
+        } else if (req.authMethod !== 'firebase' || !req.authUid) {
+          return res.status(403).json({
+            success: false,
+            error: 'Forbidden',
+            message: 'You do not have permission to modify this road',
+          });
+        }
+
+        const createdByUid = resolveCreatedByUidForCreate(req);
         const doc = {
           name: roadName,
           Roads: roadName,
           coordinates: JSON.stringify(coords),
           user: req.body.user !== undefined ? req.body.user : null,
+          createdByUid,
           localId: null,
           source,
           createdAt: now,
@@ -226,6 +261,11 @@ module.exports = (db) => {
         return res.json({ success: true, id, data: roadToClient(id, doc), created: true });
       }
 
+      const current = existing.data() || {};
+      if (!assertCanMutateRoad(req, res, current, id)) {
+        return;
+      }
+
       const updates = { updatedAt: now };
       if (req.body.name) {
         updates.name = String(req.body.name).trim();
@@ -234,6 +274,7 @@ module.exports = (db) => {
       const coords = normalizeCoordinates(req.body.coordinates);
       if (coords) updates.coordinates = JSON.stringify(coords);
       if (req.body.user !== undefined) updates.user = req.body.user;
+      // createdByUid / source must not be client-rewritten for ownership bypass
 
       await ref.update(updates);
       const updated = await ref.get();
@@ -251,10 +292,18 @@ module.exports = (db) => {
         return res.status(503).json({ success: false, error: 'Database not available' });
       }
       const { id } = req.params;
-      const deletedBy = req.body?.deletedBy || req.query?.deletedBy || 'unknown';
       const ref = db.collection('roads').doc(id);
       const existing = await ref.get();
-      const isStatic = String(id).startsWith('static_');
+      const isStatic = isStaticRoad(id, existing.exists ? existing.data() : { source: String(id).startsWith('static_') ? 'static' : 'user' });
+      const deletedBy = deletedByFromAuth(req);
+
+      // Authorize before mutate / tombstone.
+      const authDoc = existing.exists
+        ? existing.data() || {}
+        : { source: isStatic ? 'static' : 'user', createdByUid: null };
+      if (!assertCanMutateRoad(req, res, authDoc, id)) {
+        return;
+      }
 
       let result = { success: true, archived: false, originalId: id, dataType: 'roads' };
 

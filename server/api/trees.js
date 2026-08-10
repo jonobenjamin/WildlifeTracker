@@ -1,6 +1,12 @@
 const express = require('express');
 const { createFieldAuth } = require('../middleware/fieldAuth');
 const { archiveAndDelete } = require('../lib/archiveDelete');
+const {
+  filterTreesOrRoadsForRead,
+  assertCanMutateOwnedRecord,
+  resolveCreatedByUidForCreate,
+  deletedByFromAuth,
+} = require('../lib/rbac');
 
 const router = express.Router();
 
@@ -85,13 +91,14 @@ module.exports = (db) => {
           trees.push({ id: doc.id, ...data });
         }
       });
-      trees.sort((a, b) => {
+      const filtered = filterTreesOrRoadsForRead(req, trees);
+      filtered.sort((a, b) => {
         const ta = a.updatedAt || a.createdAt || '';
         const tb = b.updatedAt || b.createdAt || '';
         return tb.localeCompare(ta);
       });
 
-      res.json({ success: true, data: trees, count: trees.length });
+      res.json({ success: true, data: filtered, count: filtered.length });
     } catch (error) {
       console.error('GET /api/trees error:', error);
       res.status(500).json({ success: false, error: 'Failed to fetch trees' });
@@ -118,13 +125,16 @@ module.exports = (db) => {
       } = req.body;
 
       if (user) {
-        const isRevoked = await checkUserRevoked(db, user);
-        if (isRevoked) {
-          return res.status(403).json({
-            success: false,
-            error: 'Access denied',
-            message: 'Your account has been suspended.',
-          });
+        // Legacy API-key path only — Firebase revoke is enforced in fieldAuth.
+        if (req.authMethod !== 'firebase') {
+          const isRevoked = await checkUserRevoked(db, user);
+          if (isRevoked) {
+            return res.status(403).json({
+              success: false,
+              error: 'Access denied',
+              message: 'Your account has been suspended.',
+            });
+          }
         }
       }
 
@@ -144,12 +154,14 @@ module.exports = (db) => {
       }
 
       const now = new Date().toISOString();
+      const createdByUid = resolveCreatedByUidForCreate(req);
       const treeData = {
         species,
         speciesOther: species === 'Other' ? speciesOther : null,
         latitude: Number(latitude),
         longitude: Number(longitude),
-        user: user || 'Unknown User',
+        user: user || 'Unknown User', // display label only
+        createdByUid,
         localId: localId || null,
         createdAt: now,
         updatedAt: now,
@@ -207,21 +219,25 @@ module.exports = (db) => {
       const { id } = req.params;
       const { user, wrappedStatus, dbh, canopyCover } = req.body;
 
-      if (user) {
-        const isRevoked = await checkUserRevoked(db, user);
-        if (isRevoked) {
-          return res.status(403).json({ success: false, error: 'Access denied' });
-        }
-      }
-
       const docRef = db.collection('trees').doc(id);
       const doc = await docRef.get();
       if (!doc.exists) {
         return res.status(404).json({ success: false, error: 'Tree not found' });
       }
 
+      const data = doc.data() || {};
+      if (!assertCanMutateOwnedRecord(req, res, data, 'tree')) {
+        return;
+      }
+
+      if (user && req.authMethod !== 'firebase') {
+        const isRevoked = await checkUserRevoked(db, user);
+        if (isRevoked) {
+          return res.status(403).json({ success: false, error: 'Access denied' });
+        }
+      }
+
       const now = new Date().toISOString();
-      const data = doc.data();
       const updates = { updatedAt: now };
 
       // Full-array replace mode (offline-first sync from client with accumulated readings)
@@ -284,6 +300,7 @@ module.exports = (db) => {
       }
       if (req.body.user !== undefined) updates.user = req.body.user;
       if (req.body.notes !== undefined) updates.notes = req.body.notes;
+      // createdByUid must not be client-writable
 
       await docRef.update(updates);
 
@@ -302,7 +319,14 @@ module.exports = (db) => {
         return res.status(503).json({ success: false, error: 'Database not available' });
       }
       const { id } = req.params;
-      const deletedBy = req.body?.deletedBy || req.query?.deletedBy || 'unknown';
+      const snap = await db.collection('trees').doc(id).get();
+      if (!snap.exists) {
+        return res.status(404).json({ success: false, error: 'Tree not found' });
+      }
+      if (!assertCanMutateOwnedRecord(req, res, snap.data() || {}, 'tree')) {
+        return;
+      }
+      const deletedBy = deletedByFromAuth(req);
       const result = await archiveAndDelete(db, {
         collection: 'trees',
         id,

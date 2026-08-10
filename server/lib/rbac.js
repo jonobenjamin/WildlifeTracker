@@ -1,16 +1,19 @@
 /**
- * Phase 2 RBAC helpers for observations.
+ * Phase 2 RBAC helpers.
  *
  * Identity comes only from fieldAuth (Firebase verify + Firestore role/status).
  * Never trust body.user / body.uid / body.role / body.status / body.createdByUid
  * for authorization or ownership.
  *
- * Rhino/Pangolin are NOT a separate ACL — visibility follows observation category
- * (and guest ownership) only.
+ * Observations:
+ * - Guide/researcher READ = sightings only (Rhino/Pangolin allowed if sighting)
+ * - Guide/researcher WRITE = any category, subject to ownership on mutate
  *
- * READ vs WRITE:
- * - Guide/researcher READ = sightings only
- * - Guide/researcher WRITE (create/mutate) = any category, subject to ownership on mutate
+ * Trees / roads:
+ * - Guide/researcher/admin/apiKey READ = existing full list (legacy)
+ * - Guest READ = own records only (createdByUid)
+ * - Mutate = ownership / admin; API key mutate denied
+ * - Static roads (id static_* or source===static) = admin-only mutate
  */
 
 function normalizeCategory(category) {
@@ -29,10 +32,16 @@ function normalizeRole(role) {
   return 'guest';
 }
 
-function observationOwnerUid(doc) {
+/** Ownership field on observations, trees, and roads. */
+function ownerUidFromDoc(doc) {
   if (!doc || typeof doc !== 'object') return null;
   const uid = doc.createdByUid || doc.created_by_uid || null;
   return uid ? String(uid) : null;
+}
+
+/** @deprecated use ownerUidFromDoc — kept for observation call sites */
+function observationOwnerUid(doc) {
+  return ownerUidFromDoc(doc);
 }
 
 /**
@@ -61,7 +70,7 @@ function canReadObservation(req, doc) {
   }
 
   if (role === 'guest') {
-    const owner = observationOwnerUid(doc);
+    const owner = ownerUidFromDoc(doc);
     return !!(owner && owner === req.authUid);
   }
 
@@ -69,18 +78,10 @@ function canReadObservation(req, doc) {
   return category === 'sighting';
 }
 
-/**
- * Filter a list of observation plain objects (must include category / createdByUid).
- * Does not mutate the input array.
- */
 function filterObservationsForRead(req, observations) {
   return (observations || []).filter((doc) => canReadObservation(req, doc));
 }
 
-/**
- * Express helper: 403 if the loaded observation is not readable by req.
- * Call after loading the Firestore doc for GET /:id/image (and similar).
- */
 function assertCanReadObservation(req, res, doc) {
   if (canReadObservation(req, doc)) return true;
   res.status(403).json({
@@ -92,31 +93,93 @@ function assertCanReadObservation(req, res, doc) {
 }
 
 /**
- * Whether the caller may PATCH/DELETE this observation.
- *
- * API key: never.
- * Admin (Firebase): any record.
- * Other Firebase roles: req.authUid === createdByUid only.
- * Legacy records with missing/null createdByUid: admin only.
+ * Trees/roads list READ:
+ * - Guest: own records only (createdByUid)
+ * - Admin / guide / researcher / apiKey: full list (legacy behavior)
  */
-function canMutateObservation(req, doc) {
+function canReadTreeOrRoad(req, doc) {
+  if (req.authMethod === 'apiKey') return true;
+  if (req.authMethod !== 'firebase' || !req.authUid) return false;
+  if (normalizeRole(req.authRole) === 'guest') {
+    const owner = ownerUidFromDoc(doc);
+    return !!(owner && owner === String(req.authUid));
+  }
+  return true;
+}
+
+function filterTreesOrRoadsForRead(req, records) {
+  return (records || []).filter((doc) => canReadTreeOrRoad(req, doc));
+}
+
+/**
+ * Generic ownership mutate (observations, trees, user roads).
+ * API key: never. Admin: any. Else: createdByUid === authUid.
+ * Legacy null createdByUid: admin only.
+ */
+function canMutateOwnedRecord(req, doc) {
   if (req.authMethod === 'apiKey') return false;
   if (req.authMethod !== 'firebase' || !req.authUid) return false;
 
   const role = normalizeRole(req.authRole);
   if (role === 'admin') return true;
 
-  const owner = observationOwnerUid(doc);
+  const owner = ownerUidFromDoc(doc);
   if (!owner) return false;
   return owner === String(req.authUid);
 }
 
-function assertCanMutateObservation(req, res, doc) {
-  if (canMutateObservation(req, doc)) return true;
+function canMutateObservation(req, doc) {
+  return canMutateOwnedRecord(req, doc);
+}
+
+function assertCanMutateOwnedRecord(req, res, doc, resourceLabel = 'record') {
+  if (canMutateOwnedRecord(req, doc)) return true;
   const message =
     req.authMethod === 'apiKey'
-      ? 'API key cannot modify or delete observations'
-      : 'You do not have permission to modify this observation';
+      ? `API key cannot modify or delete ${resourceLabel}`
+      : `You do not have permission to modify this ${resourceLabel}`;
+  res.status(403).json({
+    success: false,
+    error: 'Forbidden',
+    message,
+  });
+  return false;
+}
+
+function assertCanMutateObservation(req, res, doc) {
+  return assertCanMutateOwnedRecord(req, res, doc, 'observation');
+}
+
+/** Static / system road: id prefix static_ or source === 'static'. */
+function isStaticRoad(id, doc) {
+  if (String(id || '').startsWith('static_')) return true;
+  const source = String((doc && doc.source) || '')
+    .toLowerCase()
+    .trim();
+  return source === 'static';
+}
+
+/**
+ * Road mutate: static/system → admin only; else ownership rules.
+ * For upsert-before-create, pass doc with intended source (may be empty).
+ */
+function canMutateRoad(req, doc, id) {
+  if (isStaticRoad(id, doc)) {
+    if (req.authMethod === 'apiKey') return false;
+    if (req.authMethod !== 'firebase' || !req.authUid) return false;
+    return normalizeRole(req.authRole) === 'admin';
+  }
+  return canMutateOwnedRecord(req, doc);
+}
+
+function assertCanMutateRoad(req, res, doc, id) {
+  if (canMutateRoad(req, doc, id)) return true;
+  const message =
+    req.authMethod === 'apiKey'
+      ? 'API key cannot modify or delete roads'
+      : isStaticRoad(id, doc)
+        ? 'Only admins can modify static/system roads'
+        : 'You do not have permission to modify this road';
   res.status(403).json({
     success: false,
     error: 'Forbidden',
@@ -150,12 +213,20 @@ function deletedByFromAuth(req) {
 module.exports = {
   normalizeCategory,
   normalizeRole,
+  ownerUidFromDoc,
   observationOwnerUid,
   canReadObservation,
   filterObservationsForRead,
   assertCanReadObservation,
+  canReadTreeOrRoad,
+  filterTreesOrRoadsForRead,
+  canMutateOwnedRecord,
   canMutateObservation,
+  assertCanMutateOwnedRecord,
   assertCanMutateObservation,
+  isStaticRoad,
+  canMutateRoad,
+  assertCanMutateRoad,
   resolveCreatedByUidForCreate,
   deletedByFromAuth,
 };
