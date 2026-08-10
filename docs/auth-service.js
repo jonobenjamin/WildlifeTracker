@@ -89,7 +89,53 @@ class AuthService {
     });
   }
 
-  // Email PIN Authentication
+  // Name + password (same as APK /api/auth/login)
+  async loginWithPassword(name, password) {
+    try {
+      const response = await fetch('https://khwaiprivate.okavangowater.com/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), password })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Login failed');
+      }
+
+      if (!data.customToken) {
+        throw new Error('Login succeeded but no token returned');
+      }
+
+      const result = await signInWithCustomToken(this.auth, data.customToken);
+
+      const displayName = data.name || name.trim();
+      try {
+        await this.createOrUpdateUser(result.user, {
+          name: displayName,
+          email: data.email || null
+        });
+      } catch (error) {
+        console.error('Failed to create/update user document:', error);
+      }
+
+      if (data.role) {
+        localStorage.setItem('authenticatedUserRole', String(data.role).toLowerCase());
+      } else {
+        await this.persistAuthenticatedRole(result.user.uid, displayName);
+      }
+
+      localStorage.setItem('userAuthenticated', 'true');
+      localStorage.setItem('authenticatedUserName', displayName);
+
+      return { success: true, user: result.user };
+    } catch (error) {
+      console.error('Password login failed:', error);
+      throw error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  // Email PIN Authentication (kept for admin / recovery paths; PWA UI uses password)
   async requestEmailPin(email, name) {
     try {
       console.log('Making PIN request for:', email);
