@@ -27,7 +27,6 @@ function yearOptions() {
 const VIEW_MODES = [
   { value: 'sightings', label: 'Sightings' },
   { value: 'trees', label: 'Trees' },
-  { value: 'maintenance', label: 'Maintenance' },
   { value: 'incidents', label: 'Incidents' },
   { value: 'vehicle', label: 'Vehicle' },
   { value: 'patrol', label: 'Patrol' },
@@ -53,7 +52,7 @@ const WATER_PARAMS = [
   { key: 'pb', label: 'Pb (ppm)' },
 ];
 
-const VIEW_LABELS = { sightings: 'Sightings', maintenance: 'Maintenance', incidents: 'Incidents' };
+const VIEW_LABELS = { sightings: 'Sightings', incidents: 'Incidents' };
 
 export default function MapFilterPanel({
   role,
@@ -95,8 +94,8 @@ export default function MapFilterPanel({
 }) {
   const showDateFilters = !['trees', 'water-quality', 'water-monitoring', 'fires'].includes(viewMode);
   const showDisplayModeSwitch = viewMode === 'sightings' || viewMode === 'trees' || viewMode === 'vehicle';
-  const showRecentToggle = ['sightings', 'maintenance', 'incidents'].includes(viewMode);
-  const showStat = ['sightings', 'trees', 'maintenance', 'incidents', 'vehicle', 'patrol'].includes(viewMode);
+  const showRecentToggle = ['sightings', 'incidents'].includes(viewMode);
+  const showStat = ['sightings', 'trees', 'incidents', 'vehicle', 'patrol'].includes(viewMode);
   const allowedViews = allowedMapViews(role);
   const viewModes = allowedViews === null ? VIEW_MODES : VIEW_MODES.filter((v) => allowedViews.includes(v.value));
 

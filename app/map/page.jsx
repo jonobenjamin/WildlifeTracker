@@ -17,7 +17,7 @@ import { buildTrackLayer, trackColor, trackLabel, trackVerticesAsHeatPoints } fr
 import { addHomeZoomControl } from '@/lib/homeZoomControl';
 import { attachWeatherPopup } from '@/lib/weather';
 import { loadRoadsDataset } from '@/lib/roadsDataset';
-import { isMapViewAllowed, allowedMapViews } from '@/lib/roles';
+import { isMapViewAllowed, allowedMapViews, canViewObservationCategory } from '@/lib/roles';
 
 const HOME_CAMPS = ['tau camp', 'little sable camp'];
 const HOME_FIT = { padding: [60, 60], maxZoom: 13 };
@@ -35,8 +35,8 @@ const WATER_LOCATIONS = {
   'little-sable': { name: 'Little Sable', coords: [-19.151743, 23.695365] },
 };
 
-const CATEGORY_MAP = { sightings: 'sighting', maintenance: 'maintenance', incidents: 'incident' };
-const RECENT_LABEL = { sightings: 'SIGHTING', maintenance: 'MAINTENANCE', incidents: 'INCIDENT' };
+const CATEGORY_MAP = { sightings: 'sighting', incidents: 'incident' };
+const RECENT_LABEL = { sightings: 'SIGHTING', incidents: 'INCIDENT' };
 
 function withinDateFilters(dateStr, { dateStart, dateEnd, month, year }) {
   if (!dateStr) return !(dateStart || dateEnd || month || year);
@@ -53,7 +53,6 @@ function popupHtml(o) {
   const lines = [`<strong class="capitalize">${escapeHtml(o.category)}</strong>`];
   if (o.animal) lines.push(`Species: ${escapeHtml(o.animal)}`);
   if (o.incident_type) lines.push(`Type: ${escapeHtml(o.incident_type)}`);
-  if (o.maintenance_type) lines.push(`Type: ${escapeHtml(o.maintenance_type)}`);
   if (o.user) lines.push(`By: ${escapeHtml(o.user)}`);
   if (o.timestamp) lines.push(dayjs(o.timestamp).format('DD MMM YYYY HH:mm'));
   return lines.join('<br>');
@@ -122,6 +121,11 @@ export default function ConcessionMapPage() {
     return Array.from(set).sort();
   }, [allObservations]);
 
+  const visibleObservations = useMemo(
+    () => allObservations.filter((o) => canViewObservationCategory(role, o.category)),
+    [allObservations, role]
+  );
+
   const treeOptions = useMemo(() => {
     const set = new Set();
     allTrees.forEach((t) => {
@@ -186,7 +190,7 @@ export default function ConcessionMapPage() {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const view = params.get('view');
-    const allowed = ['sightings', 'trees', 'maintenance', 'incidents', 'vehicle', 'patrol', 'water-quality', 'water-monitoring', 'fires'];
+    const allowed = ['sightings', 'trees', 'incidents', 'vehicle', 'patrol', 'water-quality', 'water-monitoring', 'fires'];
     if (view && allowed.includes(view)) {
       if (!role || isMapViewAllowed(role, view)) {
         setViewMode(view);
@@ -381,9 +385,9 @@ export default function ConcessionMapPage() {
 
       const filters = { dateStart, dateEnd, month, year };
 
-      if (viewMode === 'sightings' || viewMode === 'maintenance' || viewMode === 'incidents') {
+      if (viewMode === 'sightings' || viewMode === 'incidents') {
         const category = CATEGORY_MAP[viewMode];
-        const filtered = allObservations.filter((o) => {
+        const filtered = visibleObservations.filter((o) => {
           if ((o.category || '').toLowerCase() !== category) return false;
           if (o.latitude == null || o.longitude == null) return false;
           if (!withinDateFilters(o.timestamp, filters)) return false;
@@ -412,7 +416,7 @@ export default function ConcessionMapPage() {
 
         if (showRecent) {
           const oneWeekAgo = dayjs().subtract(7, 'day');
-          const recentMarkers = allObservations
+          const recentMarkers = visibleObservations
             .filter((o) => (o.category || '').toLowerCase() === category && o.latitude != null && o.longitude != null && dayjs(o.timestamp).isAfter(oneWeekAgo))
             .map((o) => {
               const marker = L.marker([o.latitude, o.longitude], { icon: recentPinIcon(L) });
@@ -533,8 +537,8 @@ export default function ConcessionMapPage() {
       if (
         focusTarget &&
         !focusAppliedRef.current &&
-        (viewMode === 'sightings' || viewMode === 'maintenance' || viewMode === 'incidents') &&
-        allObservations.length > 0
+        (viewMode === 'sightings' || viewMode === 'incidents') &&
+        visibleObservations.length > 0
       ) {
         focusAppliedRef.current = true;
         map.setView([focusTarget.lat, focusTarget.lng], Math.max(map.getZoom(), 15));
@@ -554,7 +558,7 @@ export default function ConcessionMapPage() {
     return () => {
       cancelled = true;
     };
-  }, [viewMode, dateStart, dateEnd, month, year, species, treeType, displayMode, showRecent, allObservations, allTrees, allTracking, fires, fireSensor, focusTarget]);
+  }, [viewMode, dateStart, dateEnd, month, year, species, treeType, displayMode, showRecent, visibleObservations, allTrees, allTracking, fires, fireSensor, focusTarget]);
 
   const loadFires = useCallback(async () => {
     setFiresLoading(true);
@@ -631,7 +635,6 @@ export default function ConcessionMapPage() {
   const totalLabel = {
     sightings: 'Total Sightings',
     trees: 'Total Trees',
-    maintenance: 'Total Maintenance',
     incidents: 'Total Incidents',
     vehicle: 'Vehicle trips',
     patrol: 'Patrol trips',
@@ -718,4 +721,4 @@ export default function ConcessionMapPage() {
   );
 }
 
-const CATEGORY_COLOR = { sighting: '#526b38', incident: '#b42318', maintenance: '#c9a96b' };
+const CATEGORY_COLOR = { sighting: '#526b38', incident: '#b42318' };

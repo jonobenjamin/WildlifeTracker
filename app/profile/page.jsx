@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import AppShell from '@/components/AppShell';
 import { useRequireRole, useAuth } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
-import { labelForRole } from '@/lib/roles';
+import { labelForRole, canViewObservationCategory, visibleObservationCategories } from '@/lib/roles';
 import dayjs from 'dayjs';
 
 export default function ProfilePage() {
@@ -22,6 +22,8 @@ export default function ProfilePage() {
 
   const displayName = profile?.name || user?.displayName || '';
   const displayContact = profile?.email || user?.email || profile?.phone || user?.phoneNumber || '';
+  const allowedCats = useMemo(() => visibleObservationCategories(role), [role]);
+  const showIncidents = allowedCats.includes('incident');
 
   useEffect(() => {
     if (!authorized) return;
@@ -43,17 +45,17 @@ export default function ProfilePage() {
       .filter(Boolean);
     if (!labels.length) return [];
     return observations.filter((o) => {
+      if (!canViewObservationCategory(role, o.category)) return false;
       const ou = (o.user || '').toLowerCase().trim();
       if (!ou) return false;
       return labels.some((label) => ou.includes(label) || label.includes(ou));
     });
-  }, [observations, displayName, displayContact, profile?.phone, user?.phoneNumber]);
+  }, [observations, displayName, displayContact, profile?.phone, user?.phoneNumber, role]);
 
   const stats = useMemo(() => {
     const sightings = mine.filter((o) => (o.category || '').toLowerCase() === 'sighting').length;
-    const maintenance = mine.filter((o) => (o.category || '').toLowerCase() === 'maintenance').length;
     const incidents = mine.filter((o) => (o.category || '').toLowerCase() === 'incident').length;
-    return { sightings, maintenance, incidents, total: mine.length };
+    return { sightings, incidents, total: mine.length };
   }, [mine]);
 
   async function handlePasswordChange(e) {
@@ -89,6 +91,17 @@ export default function ProfilePage() {
 
   if (!authorized) return null;
 
+  const statCards = showIncidents
+    ? [
+        ['Sightings', stats.sightings],
+        ['Incidents', stats.incidents],
+        ['Total logged', stats.total],
+      ]
+    : [
+        ['Sightings', stats.sightings],
+        ['Total logged', stats.total],
+      ];
+
   return (
     <AppShell title="Profile">
       <div className="max-w-4xl space-y-6">
@@ -122,13 +135,8 @@ export default function ProfilePage() {
             <p className="text-sm text-portal-danger">{error}</p>
           ) : (
             <>
-              <div className="grid grid-cols-4 gap-3 mb-5">
-                {[
-                  ['Sightings', stats.sightings],
-                  ['Maintenance', stats.maintenance],
-                  ['Incidents', stats.incidents],
-                  ['Total logged', stats.total],
-                ].map(([label, n]) => (
+              <div className={`grid gap-3 mb-5 ${showIncidents ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                {statCards.map(([label, n]) => (
                   <div key={label} className="rounded-portal bg-portal-surface-muted border border-portal-border p-4 text-center">
                     <div className="text-2xl font-bold" style={{ color: 'var(--kpr-green-light)' }}>
                       {n}
@@ -143,7 +151,7 @@ export default function ProfilePage() {
                     <tr>
                       <th className="text-left px-3 py-2">Date</th>
                       <th className="text-left px-3 py-2">Category</th>
-                      <th className="text-left px-3 py-2">Animal / type</th>
+                      <th className="text-left px-3 py-2">{showIncidents ? 'Animal / type' : 'Animal'}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -151,7 +159,9 @@ export default function ProfilePage() {
                       <tr key={o.id} className="border-t border-portal-border">
                         <td className="px-3 py-2">{o.timestamp ? dayjs(o.timestamp).format('DD MMM YYYY HH:mm') : '—'}</td>
                         <td className="px-3 py-2 capitalize">{o.category || '—'}</td>
-                        <td className="px-3 py-2">{o.animal || o.incident_type || o.maintenance_type || '—'}</td>
+                        <td className="px-3 py-2">
+                          {o.animal || (showIncidents ? o.incident_type : null) || '—'}
+                        </td>
                       </tr>
                     ))}
                     {mine.length === 0 && (

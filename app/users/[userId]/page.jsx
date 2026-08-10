@@ -58,9 +58,9 @@ export default function UserReportPage() {
 
   const stats = useMemo(() => {
     const sightings = mine.filter((o) => (o.category || '').toLowerCase() === 'sighting').length;
-    const maintenance = mine.filter((o) => (o.category || '').toLowerCase() === 'maintenance').length;
     const incidents = mine.filter((o) => (o.category || '').toLowerCase() === 'incident').length;
-    return { sightings, maintenance, incidents, total: mine.length };
+    const visible = mine.filter((o) => (o.category || '').toLowerCase() !== 'maintenance');
+    return { sightings, incidents, total: visible.length, rows: visible };
   }, [mine]);
 
   if (!authorized) return null;
@@ -104,11 +104,10 @@ export default function UserReportPage() {
 
             <section className="kpr-card p-6">
               <h2 className="text-base font-semibold mb-4">Submission summary</h2>
-              <div className="grid grid-cols-4 gap-3 mb-5">
+              <div className="grid grid-cols-3 gap-3 mb-5">
                 {[
                   ['Sightings', stats.sightings],
                   ['Incidents', stats.incidents],
-                  ['Maintenance', stats.maintenance],
                   ['Total', stats.total],
                 ].map(([label, n]) => (
                   <div key={label} className="rounded-portal bg-portal-surface-muted border border-portal-border p-4 text-center">
@@ -131,17 +130,17 @@ export default function UserReportPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {mine.map((o) => (
+                    {stats.rows.map((o) => (
                       <tr key={o.id} className="border-t border-portal-border">
                         <td className="px-3 py-2 whitespace-nowrap">
                           {o.timestamp ? dayjs(o.timestamp).format('DD MMM YYYY HH:mm') : '—'}
                         </td>
                         <td className="px-3 py-2 capitalize">{o.category || '—'}</td>
-                        <td className="px-3 py-2">{o.animal || o.incident_type || o.maintenance_type || '—'}</td>
+                        <td className="px-3 py-2">{o.animal || o.incident_type || '—'}</td>
                         <td className="px-3 py-2 truncate max-w-xs">{o.notes || '—'}</td>
                       </tr>
                     ))}
-                    {mine.length === 0 && (
+                    {stats.rows.length === 0 && (
                       <tr>
                         <td colSpan={4} className="px-3 py-6 text-center text-portal-text-muted">
                           No submissions for this user.

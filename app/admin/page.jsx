@@ -87,7 +87,7 @@ export default function AdminPage() {
     users.forEach((u) => {
       const label = (u.name || u.email || u.phone || '').toLowerCase().trim();
       if (!label) {
-        map[u.id] = { sightings: 0, incidents: 0, maintenance: 0, total: 0 };
+        map[u.id] = { sightings: 0, incidents: 0, total: 0 };
         return;
       }
       const mine = filteredObservations.filter((o) => {
@@ -96,8 +96,7 @@ export default function AdminPage() {
       });
       const sightings = mine.filter((o) => (o.category || '').toLowerCase() === 'sighting').length;
       const incidents = mine.filter((o) => (o.category || '').toLowerCase() === 'incident').length;
-      const maintenance = mine.filter((o) => (o.category || '').toLowerCase() === 'maintenance').length;
-      map[u.id] = { sightings, incidents, maintenance, total: sightings + incidents + maintenance };
+      map[u.id] = { sightings, incidents, total: sightings + incidents };
     });
     return map;
   }, [users, filteredObservations]);
@@ -202,14 +201,13 @@ export default function AdminPage() {
                     <th className="text-left px-3 py-2.5">Last login</th>
                     <th className="text-right px-3 py-2.5">Sightings</th>
                     <th className="text-right px-3 py-2.5">Incidents</th>
-                    <th className="text-right px-3 py-2.5">Maintenance</th>
                     <th className="text-right px-3 py-2.5">Total</th>
                     <th className="text-left px-3 py-2.5">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((u) => {
-                    const counts = userSubmissionCounts[u.id] || { sightings: 0, incidents: 0, maintenance: 0, total: 0 };
+                    const counts = userSubmissionCounts[u.id] || { sightings: 0, incidents: 0, total: 0 };
                     return (
                       <tr key={u.id} className="border-t border-portal-border hover:bg-portal-surface-muted/60">
                         <td className="px-3 py-2.5 font-medium">
@@ -241,7 +239,6 @@ export default function AdminPage() {
                         </td>
                         <td className="px-3 py-2.5 text-right">{counts.sightings}</td>
                         <td className="px-3 py-2.5 text-right">{counts.incidents}</td>
-                        <td className="px-3 py-2.5 text-right">{counts.maintenance}</td>
                         <td className="px-3 py-2.5 text-right font-semibold">{counts.total}</td>
                         <td className="px-3 py-2.5 space-x-2 whitespace-nowrap">
                           <button className="text-xs font-semibold" style={{ color: 'var(--kpr-green)' }} onClick={() => setEditing(u)}>

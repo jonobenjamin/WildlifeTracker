@@ -29,7 +29,6 @@ const TABS = [
   { key: 'home', label: 'Home' },
   { key: 'sightings', label: 'Sightings', countKey: 'sightings' },
   { key: 'incidents', label: 'Incidents', countKey: 'incidents' },
-  { key: 'maintenance', label: 'Maintenance', countKey: 'maintenance' },
   { key: 'tracked', label: 'Tracked', countKey: 'tracked' },
 ];
 
@@ -154,7 +153,7 @@ function ObservationList({ rows, typeField, empty, onRowClick }) {
                 {o.timestamp ? dayjs(o.timestamp).format('DD MMM YYYY HH:mm') : '—'}
               </td>
               <td className="px-3 py-2">
-                {o[typeField] || o.poaching_type || o.animal || o.incident_type || o.maintenance_type || '—'}
+                {o[typeField] || o.poaching_type || o.animal || o.incident_type || '—'}
               </td>
               <td className="px-3 py-2">{o.user || '—'}</td>
               <td className="px-3 py-2 truncate max-w-xs">{o.notes || '—'}</td>
@@ -203,7 +202,11 @@ export default function ReportsPage() {
   }, [authorized]);
 
   const filteredObservations = useMemo(
-    () => observations.filter((o) => withinDateRange(o.timestamp, dateStart, dateEnd)),
+    () =>
+      observations.filter((o) => {
+        if ((o.category || '').toLowerCase() === 'maintenance') return false;
+        return withinDateRange(o.timestamp, dateStart, dateEnd);
+      }),
     [observations, dateStart, dateEnd]
   );
 
@@ -215,13 +218,11 @@ export default function ReportsPage() {
   const stats = useMemo(() => {
     const sightings = filteredObservations.filter((o) => (o.category || '').toLowerCase() === 'sighting');
     const incidents = filteredObservations.filter((o) => (o.category || '').toLowerCase() === 'incident');
-    const maintenance = filteredObservations.filter((o) => (o.category || '').toLowerCase() === 'maintenance');
     const byDateDesc = (a, b) => dayjs(b.timestamp || 0).valueOf() - dayjs(a.timestamp || 0).valueOf();
     const totalKm = filteredTracking.reduce((sum, t) => sum + (t.distanceMeters || 0), 0) / 1000;
     return {
       sightings: [...sightings].sort(byDateDesc),
       incidents: [...incidents].sort(byDateDesc),
-      maintenance: [...maintenance].sort(byDateDesc),
       totalKm,
       totalSubmissions: filteredObservations.length,
     };
@@ -239,7 +240,6 @@ export default function ReportsPage() {
   }, [stats.sightings]);
 
   const incidentCounts = useMemo(() => typeCounts(stats.incidents, 'incident_type'), [stats.incidents]);
-  const maintenanceCounts = useMemo(() => typeCounts(stats.maintenance, 'maintenance_type'), [stats.maintenance]);
 
   const monthlyTrend = useMemo(() => {
     const counts = {};
@@ -270,7 +270,7 @@ export default function ReportsPage() {
       rows.push([
         o.timestamp || '',
         o.category || '',
-        o.animal || o.incident_type || o.maintenance_type || '',
+        o.animal || o.incident_type || '',
         o.user || '',
         o.latitude ?? '',
         o.longitude ?? '',
@@ -327,7 +327,7 @@ export default function ReportsPage() {
     <AppShell title="Reporting">
       <div className="space-y-6">
         <div className="flex items-center justify-between gap-4">
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 flex-1">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
             {TABS.map((tab) => {
               const selected = isTabSelected(tab);
               return (
@@ -459,43 +459,6 @@ export default function ReportsPage() {
                 typeField="incident_type"
                 empty="No incidents recorded."
                 onRowClick={(o) => openOnMap(o, 'incidents')}
-              />
-            </section>
-          </div>
-        ) : activeTab === 'maintenance' ? (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <section className="kpr-card p-6">
-                <h2 className="text-base font-semibold mb-4">Maintenance by type</h2>
-                {maintenanceCounts.length === 0 ? (
-                  <p className="text-sm text-portal-text-muted text-center py-12">No maintenance data to chart.</p>
-                ) : (
-                  <ChartCanvas
-                    type="pie"
-                    height={300}
-                    data={{
-                      labels: maintenanceCounts.map(([t]) => t),
-                      datasets: [
-                        {
-                          data: maintenanceCounts.map(([, n]) => n),
-                          backgroundColor: maintenanceCounts.map((_, i) => PIE_COLORS[i % PIE_COLORS.length]),
-                        },
-                      ],
-                    }}
-                    options={{ plugins: { legend: { position: 'bottom' } } }}
-                  />
-                )}
-              </section>
-              <UserSubmissionsPie rows={stats.maintenance} title="Maintenance by user" />
-            </div>
-            <section className="kpr-card p-6">
-              <h2 className="text-base font-semibold mb-1">All maintenance</h2>
-              <p className="text-xs text-portal-text-muted mb-4">Click a row to open it on the concession map.</p>
-              <ObservationList
-                rows={stats.maintenance}
-                typeField="maintenance_type"
-                empty="No maintenance recorded."
-                onRowClick={(o) => openOnMap(o, 'maintenance')}
               />
             </section>
           </div>
