@@ -321,7 +321,11 @@ router.post('/', upload.single('image'), async (req, res) => {
       leopard,
       activity,
       age,
+      sex,
+      animal_class,
       vulture_tagged,
+      vulture_species,
+      species_count,
       incident_type,
       poaching_type,
       poached_animal,
@@ -415,7 +419,14 @@ router.post('/', upload.single('image'), async (req, res) => {
       if (leopard) observationData.leopard = leopard;
       if (activity) observationData.activity = activity;
       if (age) observationData.age = age;
+      if (sex) observationData.sex = sex;
+      if (animal_class) observationData.animal_class = animal_class;
       if (vulture_tagged !== undefined) observationData.vulture_tagged = vulture_tagged;
+      if (vulture_species) observationData.vulture_species = vulture_species;
+      if (species_count !== undefined && species_count !== null && species_count !== '') {
+        const n = Number(species_count);
+        if (Number.isFinite(n)) observationData.species_count = n;
+      }
     }
     if (category === 'Incident') {
       observationData.incident_type = incident_type;
@@ -578,7 +589,11 @@ router.patch('/:id', async (req, res) => {
       'leopard',
       'activity',
       'age',
+      'sex',
+      'animal_class',
       'vulture_tagged',
+      'vulture_species',
+      'species_count',
       'incident_type',
       'poaching_type',
       'poached_animal',
@@ -593,7 +608,7 @@ router.patch('/:id', async (req, res) => {
     const updates = { updatedAt: new Date().toISOString() };
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
-        if (key === 'latitude' || key === 'longitude') {
+        if (key === 'latitude' || key === 'longitude' || key === 'species_count') {
           const n = Number(req.body[key]);
           if (Number.isFinite(n)) updates[key] = n;
         } else {

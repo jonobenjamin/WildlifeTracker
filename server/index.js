@@ -116,6 +116,7 @@ app.get('/api', (req, res) => {
       tracking: '/api/tracking',
       trees: '/api/trees',
       roads: '/api/roads',
+      pois: '/api/pois',
       fires: '/api/fires',
       waterMonitoring: '/api/water-monitoring',
       auth: '/api/auth',
@@ -138,6 +139,7 @@ app.use('/api/water-monitoring', require('./api/water-monitoring')(db));
 app.use('/api/tracking', require('./api/tracking')(db));
 app.use('/api/trees', require('./api/trees')(db));
 app.use('/api/roads', require('./api/roads')(db));
+app.use('/api/pois', require('./api/pois')(db));
 app.use('/api/okavango-water', require('./api/okavango-water'));
 
 app.use((err, req, res, next) => {
