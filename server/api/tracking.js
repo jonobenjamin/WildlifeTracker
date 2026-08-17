@@ -1,40 +1,30 @@
 const express = require('express');
 const { createFieldAuth } = require('../middleware/fieldAuth');
-const router = express.Router();
+const {
+  filterTrackingForRead,
+  resolveCreatedByUidForCreate,
+} = require('../lib/rbac');
 
-// Check if user is revoked (reuse pattern from observations)
-async function checkUserRevoked(db, userIdentifier) {
-  try {
-    if (!userIdentifier) return false;
-    let userDoc = await db.collection('users').doc(userIdentifier).get();
-    if (!userDoc.exists && userIdentifier.includes('@')) {
-      const emailKey = userIdentifier.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
-      userDoc = await db.collection('users').doc('email_' + emailKey).get();
-    }
-    if (!userDoc.exists) {
-      const usersSnapshot = await db.collection('users').get();
-      for (const doc of usersSnapshot.docs) {
-        const data = doc.data();
-        if (data.email === userIdentifier || data.uid === userIdentifier ||
-            data.name === userIdentifier || (data.name && userIdentifier.includes(data.name)) ||
-            (data.email && userIdentifier.includes(data.email.split('@')[0]))) {
-          userDoc = doc;
-          break;
-        }
-      }
-    }
-    if (!userDoc.exists) return false;
-    return userDoc.data().status === 'revoked';
-  } catch (error) {
-    console.error('Error checking user status:', error);
-    return false;
-  }
-}
+const router = express.Router();
 
 module.exports = (db) => {
   const validateApiKey = createFieldAuth(db);
 
   router.use(validateApiKey);
+
+  async function displayNameForAuth(req) {
+    if (!db || !req.authUid) return null;
+    try {
+      const snap = await db.collection('users').doc(req.authUid).get();
+      if (snap.exists) {
+        const name = (snap.data().name || '').trim();
+        if (name) return name;
+      }
+    } catch (err) {
+      console.warn('Could not load user name for tracking:', err.message);
+    }
+    return null;
+  }
 
   // POST /api/tracking - Create new tracking activity
   router.post('/', async (req, res) => {
@@ -43,7 +33,7 @@ module.exports = (db) => {
         return res.status(503).json({
           success: false,
           error: 'Database not available',
-          message: 'Firebase not configured'
+          message: 'Firebase not configured',
         });
       }
 
@@ -55,56 +45,55 @@ module.exports = (db) => {
         user,
         totalTimeSeconds,
         distanceMeters,
-        geoJson
+        geoJson,
       } = req.body;
 
-      if (!startTime || !endTime || !trackingType || !user) {
+      if (!startTime || !endTime || !trackingType) {
         return res.status(400).json({
           success: false,
-          error: 'Missing required fields: startTime, endTime, trackingType, user'
+          error: 'Missing required fields: startTime, endTime, trackingType',
         });
       }
 
       if (!['patrol', 'vehicle'].includes(String(trackingType).toLowerCase())) {
         return res.status(400).json({
           success: false,
-          error: 'trackingType must be "patrol" or "vehicle"'
+          error: 'trackingType must be "patrol" or "vehicle"',
         });
       }
 
       if (trackingType.toLowerCase() === 'vehicle' && !vehicle) {
         return res.status(400).json({
           success: false,
-          error: 'vehicle is required when trackingType is "vehicle"'
+          error: 'vehicle is required when trackingType is "vehicle"',
         });
       }
 
-      // Check user revocation
-      const isRevoked = await checkUserRevoked(db, user);
-      if (isRevoked) {
-        return res.status(403).json({
-          success: false,
-          error: 'Access denied',
-          message: 'Your account has been suspended.'
-        });
-      }
+      const createdByUid = resolveCreatedByUidForCreate(req);
+      const displayName =
+        (await displayNameForAuth(req)) ||
+        (typeof user === 'string' ? user.trim() : '') ||
+        'Unknown User';
 
-      // Store geoJson as JSON string - Firestore rejects nested arrays (coordinates)
-      const geoJsonStr = geoJson != null
-        ? (typeof geoJson === 'string' ? geoJson : JSON.stringify(geoJson))
-        : null;
+      const geoJsonStr =
+        geoJson != null
+          ? typeof geoJson === 'string'
+            ? geoJson
+            : JSON.stringify(geoJson)
+          : null;
 
       const trackingData = {
         startTime,
         endTime,
         trackingType: String(trackingType).toLowerCase(),
-        user,
+        user: displayName,
+        createdByUid,
         totalTimeSeconds: totalTimeSeconds ?? null,
         distanceMeters: distanceMeters ?? null,
         geoJson: geoJsonStr,
         vehicle: trackingType.toLowerCase() === 'vehicle' ? vehicle : null,
         timestamp: new Date().toISOString(),
-        synced: true
+        synced: true,
       };
 
       const docRef = await db.collection('tracking').add(trackingData);
@@ -114,39 +103,39 @@ module.exports = (db) => {
       res.status(201).json({
         success: true,
         message: 'Tracking activity saved successfully',
-        data: { id: docRef.id, ...trackingData }
+        data: { id: docRef.id, ...trackingData },
       });
     } catch (error) {
       console.error('Error saving tracking:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to save tracking',
-        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined,
       });
     }
   });
 
-  // GET /api/tracking - Fetch tracking activities (for admin/map display)
+  // GET /api/tracking - Fetch tracking activities (role-filtered)
   router.get('/', async (req, res) => {
     try {
       if (!db) {
         return res.status(503).json({
           success: false,
-          error: 'Database not available'
+          error: 'Database not available',
         });
       }
 
-      const snapshot = await db.collection('tracking')
+      const snapshot = await db
+        .collection('tracking')
         .orderBy('timestamp', 'desc')
         .limit(500)
         .get();
 
       const activities = [];
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc) => {
         const data = doc.data();
-        // Parse geoJson from string (stored to avoid Firestore nested-entity limits)
-        const geoJson = data.geoJson;
         const parsed = { ...data };
+        const geoJson = data.geoJson;
         if (typeof geoJson === 'string') {
           try {
             parsed.geoJson = JSON.parse(geoJson);
@@ -157,16 +146,18 @@ module.exports = (db) => {
         activities.push({ id: doc.id, ...parsed });
       });
 
+      const filtered = filterTrackingForRead(req, activities);
+
       res.json({
         success: true,
-        data: activities,
-        count: activities.length
+        data: filtered,
+        count: filtered.length,
       });
     } catch (error) {
       console.error('Error fetching tracking:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to fetch tracking'
+        error: 'Failed to fetch tracking',
       });
     }
   });

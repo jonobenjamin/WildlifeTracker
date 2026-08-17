@@ -218,15 +218,7 @@ module.exports = (db) => {
           req.body.source || (String(id).startsWith('static_') ? 'static' : 'user');
         const provisional = { source };
 
-        // Upsert-create: static/system → admin only; user roads → any Firebase user;
-        // API key cannot PATCH (including upsert).
-        if (req.authMethod === 'apiKey') {
-          return res.status(403).json({
-            success: false,
-            error: 'Forbidden',
-            message: 'API key cannot modify or delete roads',
-          });
-        }
+        // Upsert-create: static/system → admin only; user roads → any Firebase user.
         if (isStaticRoad(id, provisional)) {
           if (!assertCanMutateRoad(req, res, provisional, id)) return;
         } else if (req.authMethod !== 'firebase' || !req.authUid) {

@@ -1,10 +1,7 @@
 /**
- * Field / portal auth middleware.
+ * Field / portal auth middleware — Firebase ID token required.
  *
- * Phase 1: Firebase ID token is preferred. Shared API_KEY remains as a
- * migration fallback so older PWA/APK builds keep working.
- *
- * On Firebase success, attaches (never trust body.role / body.user for identity):
+ * On success, attaches (never trust body.role / body.user for identity):
  *   req.authMethod = 'firebase'
  *   req.firebaseUser = decoded token
  *   req.authUid = uid
@@ -29,11 +26,6 @@ function clearAuthIdentity(req) {
   req.authUid = null;
   req.authRole = null;
   req.authStatus = null;
-}
-
-function acceptApiKey(req) {
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
-  return !!(apiKey && process.env.API_KEY && apiKey === process.env.API_KEY);
 }
 
 /**
@@ -82,61 +74,35 @@ function attachFirebaseAuth(req, resolved) {
   req.authStatus = resolved.status;
 }
 
-function attachApiKeyAuth(req) {
-  req.authMethod = 'apiKey';
-  req.firebaseUser = null;
-  req.authUid = null;
-  // No identity — callers must not treat this as an authenticated user.
-  req.authRole = null;
-  req.authStatus = null;
-}
-
 function extractBearer(req) {
   const authHeader = req.headers.authorization || '';
   if (!authHeader.startsWith('Bearer ')) return '';
   return authHeader.slice(7).trim();
 }
 
-/**
- * Preferred: Firebase Bearer. Fallback: shared API_KEY.
- */
+/** Require a valid Firebase Bearer token. */
 function createFieldAuth(db) {
   return async function requireFieldAuth(req, res, next) {
     clearAuthIdentity(req);
 
     const token = extractBearer(req);
-    if (token) {
-      const resolved = await resolveFirebaseAuth(db, token);
-      if (resolved.ok) {
-        attachFirebaseAuth(req, resolved);
-        return next();
-      }
-      // Invalid/expired Bearer: fall through to API key so dual-auth clients
-      // (portal sends both) and legacy builds still work during migration.
-      if (resolved.code === 403) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: resolved.message,
-        });
-      }
-    }
-
-    if (acceptApiKey(req)) {
-      attachApiKeyAuth(req);
-      return next();
-    }
-
-    if (token) {
+    if (!token) {
       return res.status(401).json({
         error: 'Unauthorized',
-        message: 'Invalid or expired session — sign in again',
+        message: 'Sign in required',
       });
     }
 
-    return res.status(401).json({
-      error: 'Unauthorized',
-      message: 'Valid API key or signed-in session required',
-    });
+    const resolved = await resolveFirebaseAuth(db, token);
+    if (!resolved.ok) {
+      return res.status(resolved.code).json({
+        error: resolved.code === 403 ? 'Forbidden' : 'Unauthorized',
+        message: resolved.message,
+      });
+    }
+
+    attachFirebaseAuth(req, resolved);
+    return next();
   };
 }
 
@@ -145,8 +111,6 @@ module.exports = {
   resolveFirebaseAuth,
   normalizeRole,
   extractBearer,
-  acceptApiKey,
   attachFirebaseAuth,
-  attachApiKeyAuth,
   clearAuthIdentity,
 };

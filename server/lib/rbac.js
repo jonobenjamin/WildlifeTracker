@@ -9,10 +9,10 @@
  * - Guide/researcher READ = sightings only (Rhino/Pangolin allowed if sighting)
  * - Guide/researcher WRITE = any category, subject to ownership on mutate
  *
- * Trees / roads:
- * - Guide/researcher/admin/apiKey READ = existing full list (legacy)
+ * Trees / roads / tracking:
+ * - Guide/researcher/admin READ = full list (operational)
  * - Guest READ = own records only (createdByUid)
- * - Mutate = ownership / admin; API key mutate denied
+ * - Mutate = ownership / admin
  * - Static roads (id static_* or source===static) = admin-only mutate
  */
 
@@ -48,20 +48,15 @@ function observationOwnerUid(doc) {
  * Whether the caller may READ this observation record.
  *
  * Admin: all categories (sighting, incident, maintenance, …), all species.
- * Guide / Researcher / API key: sightings only (Rhino/Pangolin allowed if sighting).
+ * Guide / Researcher: sightings only (Rhino/Pangolin allowed if sighting).
  * Guest (Firebase): own records only (any category they own), via createdByUid.
  * Legacy rows with no createdByUid are not visible to guests.
  */
 function canReadObservation(req, doc) {
-  const method = req.authMethod;
   const role = normalizeRole(req.authRole);
   const category = normalizeCategory(doc && doc.category);
 
-  if (method === 'apiKey') {
-    return category === 'sighting';
-  }
-
-  if (method !== 'firebase' || !req.authUid) {
+  if (req.authMethod !== 'firebase' || !req.authUid) {
     return false;
   }
 
@@ -93,12 +88,11 @@ function assertCanReadObservation(req, res, doc) {
 }
 
 /**
- * Trees/roads list READ:
+ * Trees/roads/tracking list READ:
  * - Guest: own records only (createdByUid)
- * - Admin / guide / researcher / apiKey: full list (legacy behavior)
+ * - Admin / guide / researcher: full list
  */
 function canReadTreeOrRoad(req, doc) {
-  if (req.authMethod === 'apiKey') return true;
   if (req.authMethod !== 'firebase' || !req.authUid) return false;
   if (normalizeRole(req.authRole) === 'guest') {
     const owner = ownerUidFromDoc(doc);
@@ -107,17 +101,25 @@ function canReadTreeOrRoad(req, doc) {
   return true;
 }
 
+/** Tracking READ: admin/guide/researcher see all; guest sees own only. */
+function canReadTracking(req, doc) {
+  return canReadTreeOrRoad(req, doc);
+}
+
+function filterTrackingForRead(req, records) {
+  return (records || []).filter((doc) => canReadTracking(req, doc));
+}
+
 function filterTreesOrRoadsForRead(req, records) {
   return (records || []).filter((doc) => canReadTreeOrRoad(req, doc));
 }
 
 /**
- * Generic ownership mutate (observations, trees, user roads).
- * API key: never. Admin: any. Else: createdByUid === authUid.
+ * Generic ownership mutate (observations, trees, user roads, tracking).
+ * Admin: any. Else: createdByUid === authUid.
  * Legacy null createdByUid: admin only.
  */
 function canMutateOwnedRecord(req, doc) {
-  if (req.authMethod === 'apiKey') return false;
   if (req.authMethod !== 'firebase' || !req.authUid) return false;
 
   const role = normalizeRole(req.authRole);
@@ -134,14 +136,10 @@ function canMutateObservation(req, doc) {
 
 function assertCanMutateOwnedRecord(req, res, doc, resourceLabel = 'record') {
   if (canMutateOwnedRecord(req, doc)) return true;
-  const message =
-    req.authMethod === 'apiKey'
-      ? `API key cannot modify or delete ${resourceLabel}`
-      : `You do not have permission to modify this ${resourceLabel}`;
   res.status(403).json({
     success: false,
     error: 'Forbidden',
-    message,
+    message: `You do not have permission to modify this ${resourceLabel}`,
   });
   return false;
 }
@@ -165,7 +163,6 @@ function isStaticRoad(id, doc) {
  */
 function canMutateRoad(req, doc, id) {
   if (isStaticRoad(id, doc)) {
-    if (req.authMethod === 'apiKey') return false;
     if (req.authMethod !== 'firebase' || !req.authUid) return false;
     return normalizeRole(req.authRole) === 'admin';
   }
@@ -174,12 +171,9 @@ function canMutateRoad(req, doc, id) {
 
 function assertCanMutateRoad(req, res, doc, id) {
   if (canMutateRoad(req, doc, id)) return true;
-  const message =
-    req.authMethod === 'apiKey'
-      ? 'API key cannot modify or delete roads'
-      : isStaticRoad(id, doc)
-        ? 'Only admins can modify static/system roads'
-        : 'You do not have permission to modify this road';
+  const message = isStaticRoad(id, doc)
+    ? 'Only admins can modify static/system roads'
+    : 'You do not have permission to modify this road';
   res.status(403).json({
     success: false,
     error: 'Forbidden',
@@ -190,8 +184,7 @@ function assertCanMutateRoad(req, res, doc, id) {
 
 /**
  * Server-side ownership stamp for POST create.
- * Firebase → authUid; API key / no identity → null.
- * Never derived from body fields.
+ * Firebase → authUid; never derived from body fields.
  */
 function resolveCreatedByUidForCreate(req) {
   if (req.authMethod === 'firebase' && req.authUid) {
@@ -220,6 +213,8 @@ module.exports = {
   assertCanReadObservation,
   canReadTreeOrRoad,
   filterTreesOrRoadsForRead,
+  canReadTracking,
+  filterTrackingForRead,
   canMutateOwnedRecord,
   canMutateObservation,
   assertCanMutateOwnedRecord,

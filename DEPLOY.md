@@ -44,7 +44,6 @@ on **`khwai-private-reserve` only**.
    (Production + Preview). At minimum:
    - `FIREBASE_SERVICE_ACCOUNT_KEY` (paste the full service-account JSON as one line)
    - `FIREBASE_PROJECT_ID`, `FIREBASE_DATABASE_ID`
-   - `API_KEY` + `NEXT_PUBLIC_API_KEY` (same value — must match what the Flutter PWA sends)
    - `ADMIN_API_KEY`
    - `NEXT_PUBLIC_FIREBASE_*` (public Firebase Web SDK config)
    - `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `EMAIL_FROM_NAME` for PIN login + alert emails
@@ -75,14 +74,10 @@ KPR emails must send from the already-verified **okavangowater.com** domain
 ### Okavango Water — quick test (after env vars are set)
 
 ```bash
-# Catalog (published dates + Leaflet bounds)
-curl -s "https://YOUR-VERCEL-HOST/api/okavango-water/catalog" \
-  -H "x-api-key: $API_KEY" | head -c 800
+# Catalog (published dates + Leaflet bounds) — sign in on the portal first, then:
+# curl with a Firebase ID token from the browser session, or test from the map UI.
 
-# One frame PNG
-curl -s -o /tmp/water.png -w "%{http_code} %{content_type}\n" \
-  "https://YOUR-VERCEL-HOST/api/okavango-water/image?date=YYYYMMDD" \
-  -H "x-api-key: $API_KEY"
+# One frame PNG — same Bearer auth as other /api/okavango-water routes.
 ```
 
 Upstream partner endpoints (server-side only):

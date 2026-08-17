@@ -51,9 +51,10 @@ See `.env.example`. Three groups:
 
 1. **`NEXT_PUBLIC_FIREBASE_*`** — public Firebase Web SDK config (same project as the PWA).
 2. **`FIREBASE_SERVICE_ACCOUNT_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_DATABASE_ID`** — server-side Firebase Admin, used by every `/api/*` route.
-3. **`API_KEY` / `NEXT_PUBLIC_API_KEY`** — the shared key the Flutter PWA already sends as `x-api-key` on `/api/observations`, `/api/trees`, `/api/tracking`, `/api/map`, `/api/water-monitoring`. Same value on both sides.
-4. **`ADMIN_API_KEY`** — protects `/api/admin/*` (user management). Kept server-only; the dashboard calls it through Next.js Server Actions (`lib/actions/adminUsers.js`) so this key never reaches the browser.
-5. **`RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `EMAIL_FROM_NAME`, `FIRMS_MAP_KEY`, `CRON_SECRET`** — Resend for PIN + alert emails (configure recipients under Admin → Configure Notifications), NASA FIRMS fire data, and the daily Vercel Cron fire check.
+3. **`ADMIN_API_KEY`** — protects `/api/admin/*` (user management). Kept server-only; the dashboard calls it through Next.js Server Actions (`lib/actions/adminUsers.js`) so this key never reaches the browser.
+4. **`RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `EMAIL_FROM_NAME`, `FIRMS_MAP_KEY`, `CRON_SECRET`** — Resend for login/alert emails (configure recipients under Admin → Configure Notifications), NASA FIRMS fire data, and the daily Vercel Cron fire check.
+
+Field and portal API routes require a **Firebase ID token** (`Authorization: Bearer`). The legacy shared `API_KEY` / `NEXT_PUBLIC_API_KEY` pair is no longer used — remove those env vars from Vercel if still set.
 
 ## Deploying
 

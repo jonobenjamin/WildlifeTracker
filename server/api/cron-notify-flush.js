@@ -6,20 +6,18 @@ const router = express.Router();
 
 /**
  * Cron: re-send alerts for recent observations that never got a successful notification.
- * Secured with CRON_SECRET (Vercel Cron) or x-api-key.
+ * Secured with CRON_SECRET (Vercel Cron) or x-vercel-cron header.
  */
 router.get('/', async (req, res) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
   const cronSecret = process.env.CRON_SECRET;
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
   // Vercel Cron sends Authorization: Bearer CRON_SECRET when set, and always
   // sets x-vercel-cron: 1. Accept either so stuck alerts still flush.
   const isVercelCron = req.headers['x-vercel-cron'] === '1';
   const authorized =
     isVercelCron ||
-    (cronSecret && token === cronSecret) ||
-    (process.env.API_KEY && apiKey === process.env.API_KEY);
+    (cronSecret && token === cronSecret);
 
   if (!authorized) {
     return res.status(401).json({ error: 'Unauthorized' });
