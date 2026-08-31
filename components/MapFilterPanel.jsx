@@ -32,6 +32,7 @@ const VIEW_MODES = [
   { value: 'patrol', label: 'Patrol' },
   { value: 'water-quality', label: 'Water Quality' },
   { value: 'water-monitoring', label: 'Water Monitoring' },
+  { value: 'ndvi-monitoring', label: 'NDVI Monitoring' },
   { value: 'fires', label: 'Fires' },
 ];
 
@@ -92,7 +93,7 @@ export default function MapFilterPanel({
   onRefreshFires,
   firesLoading,
 }) {
-  const showDateFilters = !['trees', 'water-quality', 'water-monitoring', 'fires'].includes(viewMode);
+  const showDateFilters = !['trees', 'water-quality', 'water-monitoring', 'ndvi-monitoring', 'fires'].includes(viewMode);
   const showDisplayModeSwitch = viewMode === 'sightings' || viewMode === 'trees' || viewMode === 'vehicle';
   const showRecentToggle = ['sightings', 'incidents'].includes(viewMode);
   const showStat = ['sightings', 'trees', 'incidents', 'vehicle', 'patrol'].includes(viewMode);
@@ -249,6 +250,12 @@ export default function MapFilterPanel({
       {viewMode === 'water-monitoring' && (
         <p className="text-xs text-portal-text-muted leading-relaxed">
           Use the slider below the map to scrub through historical Okavango Delta water extent imagery. For only the latest image on any view, toggle Water in the left ribbon legend.
+        </p>
+      )}
+
+      {viewMode === 'ndvi-monitoring' && (
+        <p className="text-xs text-portal-text-muted leading-relaxed">
+          Use the slider below the map to scrub through historical NDVI imagery for the reserve. For only the latest image on any view, toggle NDVI in the left ribbon legend.
         </p>
       )}
 

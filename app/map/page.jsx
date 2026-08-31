@@ -10,6 +10,8 @@ import MapFilterPanel from '@/components/MapFilterPanel';
 import WaterTrendsModal from '@/components/WaterTrendsModal';
 import WaterExtentSlider from '@/components/WaterExtentSlider';
 import LatestWaterOverlay from '@/components/LatestWaterOverlay';
+import NdviExtentSlider from '@/components/NdviExtentSlider';
+import LatestNdviOverlay from '@/components/LatestNdviOverlay';
 import { useAuth, useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
 import { divIcon, dotIcon, recentPinIcon, colorForLabel, ensureHeatPlugin, fetchGeoJson, lodgeIcon } from '@/lib/mapIcons';
@@ -27,6 +29,7 @@ const LEGEND_ITEMS = [
   { key: 'camps', label: 'Camps', emoji: '🏕️' },
   { key: 'poi', label: 'Points of interest', emoji: '📍' },
   { key: 'water', label: 'Water (latest)', emoji: '💧' },
+  { key: 'ndvi', label: 'NDVI (latest)', emoji: '🌿' },
 ];
 
 const WATER_LOCATIONS = {
@@ -80,7 +83,7 @@ export default function ConcessionMapPage() {
   // WaterExtentSlider (which needs map + L) would never mount without this.
   const [mapReady, setMapReady] = useState({ map: null, L: null });
 
-  const [toggles, setToggles] = useState({ roads: true, camps: true, poi: false, water: false });
+  const [toggles, setToggles] = useState({ roads: true, camps: true, poi: false, water: false, ndvi: false });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -190,7 +193,7 @@ export default function ConcessionMapPage() {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const view = params.get('view');
-    const allowed = ['sightings', 'trees', 'incidents', 'vehicle', 'patrol', 'water-quality', 'water-monitoring', 'fires'];
+    const allowed = ['sightings', 'trees', 'incidents', 'vehicle', 'patrol', 'water-quality', 'water-monitoring', 'ndvi-monitoring', 'fires'];
     if (view && allowed.includes(view)) {
       if (!role || isMapViewAllowed(role, view)) {
         setViewMode(view);
@@ -671,8 +674,14 @@ export default function ConcessionMapPage() {
           {mapReady.map && mapReady.L && toggles.water && viewMode !== 'water-monitoring' && (
             <LatestWaterOverlay map={mapReady.map} L={mapReady.L} enabled />
           )}
+          {mapReady.map && mapReady.L && toggles.ndvi && viewMode !== 'ndvi-monitoring' && (
+            <LatestNdviOverlay map={mapReady.map} L={mapReady.L} enabled />
+          )}
           {viewMode === 'water-monitoring' && mapReady.map && mapReady.L && (
             <WaterExtentSlider map={mapReady.map} L={mapReady.L} />
+          )}
+          {viewMode === 'ndvi-monitoring' && mapReady.map && mapReady.L && (
+            <NdviExtentSlider map={mapReady.map} L={mapReady.L} />
           )}
         </div>
 

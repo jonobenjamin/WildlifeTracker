@@ -141,6 +141,7 @@ app.use('/api/trees', require('./api/trees')(db));
 app.use('/api/roads', require('./api/roads')(db));
 app.use('/api/pois', require('./api/pois')(db));
 app.use('/api/okavango-water', require('./api/okavango-water'));
+app.use('/api/okavango-ndvi', require('./api/okavango-ndvi'));
 
 app.use((err, req, res, next) => {
   console.error(err.stack);

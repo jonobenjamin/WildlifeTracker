@@ -50,9 +50,12 @@ on **`khwai-private-reserve` only**.
      (create a **new** Resend API key / verified domain for this project; then configure who
      gets alerts under Admin → Configure Notifications)
    - `FIRMS_MAP_KEY`, `CRON_SECRET` if you want the daily fire-check cron
-   - `OKAVANGO_API_BASE=https://okavangowater.com`, `OKAVANGO_PARTNER_SLUG`, `OKAVANGO_API_KEY`
+   - `OKAVANGO_API_BASE=https://www.okavangowater.com`, `OKAVANGO_PARTNER_SLUG`, `OKAVANGO_API_KEY`
      (server-side only — used by `/api/okavango-water/*` to proxy historical water-extent PNGs;
      the partner key never reaches the browser)
+   - `OKAVANGO_NDVI_PARTNER_SLUG=kpr-ndvi`, `OKAVANGO_NDVI_API_KEY`
+     (server-side only — used by `/api/okavango-ndvi/*` for NDVI catalog + PNG overlays;
+     paste the key from the **KPR-NDVI** partner endpoint on okavangowater.com)
 
 ### Resend setup (Okavango Water domain)
 
@@ -81,8 +84,12 @@ KPR emails must send from the already-verified **okavangowater.com** domain
 ```
 
 Upstream partner endpoints (server-side only):
-`GET https://okavangowater.com/api/partners/$OKAVANGO_PARTNER_SLUG`
+`GET https://www.okavangowater.com/api/partners/$OKAVANGO_PARTNER_SLUG`
 and `.../image?date=YYYYMMDD` with header `X-API-Key: $OKAVANGO_API_KEY`.
+
+NDVI (same pattern, separate slug/key):
+`GET https://www.okavangowater.com/api/partners/kpr-ndvi?date=YYYYMMDD`
+and `.../kpr-ndvi/image?date=YYYYMMDD` with header `X-API-Key: $OKAVANGO_NDVI_API_KEY`.
 
 ## 3. Field PWA (`docs/`) on Vercel — `kpr-sightings.okavangowater.com`
 
