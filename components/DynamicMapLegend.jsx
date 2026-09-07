@@ -12,7 +12,10 @@ export default function DynamicMapLegend({ title = 'Legend', items }) {
   if (!items?.length) return null;
 
   return (
-    <div className="absolute top-3 left-3 z-[500] kpr-card overflow-hidden select-none" style={{ minWidth: 180, maxWidth: 240 }}>
+    <div
+      className="absolute left-3 z-[500] kpr-card overflow-hidden select-none"
+      style={{ top: 118, minWidth: 180, maxWidth: 240 }}
+    >
       <button
         type="button"
         className="w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-semibold"
