@@ -8,13 +8,18 @@ import { useAuth, useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
 import { colorForLabel, dotIcon, fetchGeoJson } from '@/lib/mapIcons';
 import { loadRoadsDataset } from '@/lib/roadsDataset';
+import { extractLatLngs, trackColor, trackLabel } from '@/lib/trackLayers';
 
 const DATA_TYPES = [
   { value: 'sightings', label: 'Sightings' },
   { value: 'incidents', label: 'Incidents' },
+  { value: 'vehicle', label: 'Vehicle tracking' },
+  { value: 'patrol', label: 'Patrol tracking' },
   { value: 'roads', label: 'Road segments' },
   { value: 'trees', label: 'Trees' },
 ];
+
+const isTrackingType = (type) => type === 'vehicle' || type === 'patrol';
 
 const TREE_SPECIES = [
   'Sossage Tree',
@@ -35,12 +40,21 @@ function actorName(profile, user) {
 function itemTitle(type, item) {
   if (type === 'sightings') return item.animal || 'Sighting';
   if (type === 'incidents') return item.incident_type || item.poaching_type || 'Incident';
+  if (isTrackingType(type)) return trackLabel(item);
   if (type === 'roads') return item.name || item.Roads || 'Road';
   if (type === 'trees') return item.species === 'Other' ? item.speciesOther || 'Other tree' : item.species || 'Tree';
   return 'Item';
 }
 
 function itemSubtitle(type, item) {
+  if (isTrackingType(type)) {
+    const when = item.startTime || item.timestamp;
+    const km =
+      item.distanceMeters != null && Number.isFinite(Number(item.distanceMeters))
+        ? `${(Number(item.distanceMeters) / 1000).toFixed(1)} km`
+        : '—';
+    return `${item.user || '—'} · ${km} · ${when ? dayjs(when).format('DD MMM YYYY HH:mm') : '—'}`;
+  }
   if (type === 'roads') {
     const when = item.updatedAt || item.createdAt;
     const src = (item.source || '').toLowerCase() === 'user' ? 'User' : 'Base';
@@ -54,6 +68,7 @@ function itemSubtitle(type, item) {
 }
 
 function hasMapGeometry(type, item) {
+  if (isTrackingType(type)) return extractLatLngs(item.geoJson).length >= 2;
   if (type === 'roads') return Array.isArray(item.coordinates) && item.coordinates.length >= 2;
   return item.latitude != null && item.longitude != null && Number.isFinite(Number(item.latitude)) && Number.isFinite(Number(item.longitude));
 }
@@ -83,6 +98,12 @@ export default function DataManagementPage() {
         const res = await apiFetch('/api/observations');
         const cat = dataType === 'sightings' ? 'sighting' : 'incident';
         const rows = (res.data || []).filter((o) => (o.category || '').toLowerCase() === cat);
+        setItems(rows);
+      } else if (isTrackingType(dataType)) {
+        const res = await apiFetch('/api/tracking');
+        const rows = (res.data || []).filter(
+          (t) => String(t.trackingType || '').toLowerCase() === dataType
+        );
         setItems(rows);
       } else if (dataType === 'trees') {
         const res = await apiFetch('/api/trees');
@@ -147,6 +168,14 @@ export default function DataManagementPage() {
           opacity: 0.9,
         });
         latlngs.forEach((ll) => bounds.push(ll));
+      } else if (isTrackingType(dataType)) {
+        const latlngs = extractLatLngs(item.geoJson);
+        layer = L.polyline(latlngs, {
+          color: selectedId === item.id ? '#b42318' : trackColor(item),
+          weight: selectedId === item.id ? 5 : 3,
+          opacity: 0.9,
+        });
+        latlngs.forEach((ll) => bounds.push(ll));
       } else {
         const color =
           dataType === 'sightings'
@@ -185,11 +214,18 @@ export default function DataManagementPage() {
       const selected = id === selectedId;
       if (layer.setStyle) {
         const item = items.find((i) => i.id === id);
-        const isUser = (item?.source || '').toLowerCase() === 'user';
-        layer.setStyle({
-          color: selected ? '#b42318' : isUser ? '#1565C0' : '#8a6d3b',
-          weight: selected ? 5 : isUser ? 3 : 2,
-        });
+        if (isTrackingType(dataType)) {
+          layer.setStyle({
+            color: selected ? '#b42318' : trackColor(item || {}),
+            weight: selected ? 5 : 3,
+          });
+        } else {
+          const isUser = (item?.source || '').toLowerCase() === 'user';
+          layer.setStyle({
+            color: selected ? '#b42318' : isUser ? '#1565C0' : '#8a6d3b',
+            weight: selected ? 5 : isUser ? 3 : 2,
+          });
+        }
       } else if (layer.setIcon) {
         const item = items.find((i) => i.id === id);
         if (!item) return;
@@ -221,6 +257,11 @@ export default function DataManagementPage() {
       const payload = sanitizeForm(dataType, form);
       if (dataType === 'sightings' || dataType === 'incidents') {
         await apiFetch(`/api/observations/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
+      } else if (isTrackingType(dataType)) {
+        await apiFetch(`/api/tracking/${id}`, {
           method: 'PATCH',
           body: JSON.stringify(payload),
         });
@@ -260,7 +301,9 @@ export default function DataManagementPage() {
           ? `/api/trees/${deleting.id}`
           : dataType === 'roads'
             ? `/api/roads/${deleting.id}`
-            : `/api/observations/${deleting.id}`;
+            : isTrackingType(dataType)
+              ? `/api/tracking/${deleting.id}`
+              : `/api/observations/${deleting.id}`;
       await apiFetch(`${path}?deletedBy=${encodeURIComponent(deletedBy)}`, {
         method: 'DELETE',
         body: JSON.stringify({ deletedBy }),
@@ -425,7 +468,9 @@ function EditModal({ dataType, item, busy, onClose, onSave }) {
   return (
     <div className="fixed inset-0 bg-black/40 z-[2000] grid place-items-center p-4" onClick={onClose}>
       <div className="kpr-card w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-base font-semibold mb-4">Edit {DATA_TYPES.find((t) => t.value === dataType)?.label.slice(0, -1) || 'record'}</h3>
+        <h3 className="text-base font-semibold mb-4">
+          Edit {DATA_TYPES.find((t) => t.value === dataType)?.label || 'record'}
+        </h3>
         <form onSubmit={submit} className="space-y-3">
           {(dataType === 'sightings' || dataType === 'incidents') && (
             <>
@@ -451,6 +496,54 @@ function EditModal({ dataType, item, busy, onClose, onSave }) {
                 <Field label="Longitude" type="number" value={form.longitude} onChange={(v) => setField('longitude', v)} />
               </div>
               <Field label="Notes" value={form.notes} onChange={(v) => setField('notes', v)} textarea />
+            </>
+          )}
+          {isTrackingType(dataType) && (
+            <>
+              <div>
+                <label className="kpr-label">Tracking type</label>
+                <select
+                  className="kpr-input"
+                  value={form.trackingType}
+                  onChange={(e) => setField('trackingType', e.target.value)}
+                >
+                  <option value="vehicle">Vehicle</option>
+                  <option value="patrol">Patrol</option>
+                </select>
+              </div>
+              {form.trackingType === 'vehicle' && (
+                <Field label="Vehicle" value={form.vehicle} onChange={(v) => setField('vehicle', v)} required />
+              )}
+              <Field label="Recorded by" value={form.user} onChange={(v) => setField('user', v)} />
+              <Field
+                label="Start time"
+                type="datetime-local"
+                value={form.startTime}
+                onChange={(v) => setField('startTime', v)}
+              />
+              <Field
+                label="End time"
+                type="datetime-local"
+                value={form.endTime}
+                onChange={(v) => setField('endTime', v)}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <Field
+                  label="Distance (m)"
+                  type="number"
+                  value={form.distanceMeters}
+                  onChange={(v) => setField('distanceMeters', v)}
+                />
+                <Field
+                  label="Duration (s)"
+                  type="number"
+                  value={form.totalTimeSeconds}
+                  onChange={(v) => setField('totalTimeSeconds', v)}
+                />
+              </div>
+              <p className="text-xs text-portal-text-muted">
+                GPS route geometry is kept as recorded. Metadata can be edited here.
+              </p>
             </>
           )}
           {dataType === 'trees' && (
@@ -543,6 +636,17 @@ function initialForm(dataType, item) {
       notes: item.notes || '',
     };
   }
+  if (isTrackingType(dataType)) {
+    return {
+      trackingType: String(item.trackingType || dataType).toLowerCase() === 'vehicle' ? 'vehicle' : 'patrol',
+      vehicle: item.vehicle || '',
+      user: item.user || '',
+      startTime: toDatetimeLocal(item.startTime),
+      endTime: toDatetimeLocal(item.endTime),
+      distanceMeters: item.distanceMeters ?? '',
+      totalTimeSeconds: item.totalTimeSeconds ?? '',
+    };
+  }
   if (dataType === 'trees') {
     return {
       species: item.species || 'Other',
@@ -573,6 +677,31 @@ function sanitizeForm(dataType, form) {
   if (out.timestamp) {
     const d = dayjs(out.timestamp);
     out.timestamp = d.isValid() ? d.toISOString() : out.timestamp;
+  }
+  if (isTrackingType(dataType)) {
+    if (out.startTime) {
+      const d = dayjs(out.startTime);
+      out.startTime = d.isValid() ? d.toISOString() : out.startTime;
+    }
+    if (out.endTime) {
+      const d = dayjs(out.endTime);
+      out.endTime = d.isValid() ? d.toISOString() : out.endTime;
+    }
+    if (out.distanceMeters !== undefined && out.distanceMeters !== '') {
+      out.distanceMeters = Number(out.distanceMeters);
+    } else {
+      out.distanceMeters = null;
+    }
+    if (out.totalTimeSeconds !== undefined && out.totalTimeSeconds !== '') {
+      out.totalTimeSeconds = Number(out.totalTimeSeconds);
+    } else {
+      out.totalTimeSeconds = null;
+    }
+    if (out.trackingType !== 'vehicle') {
+      out.vehicle = null;
+    } else {
+      out.vehicle = String(out.vehicle || '').trim();
+    }
   }
   if (dataType === 'roads' && out.name) out.name = String(out.name).trim();
   return out;
