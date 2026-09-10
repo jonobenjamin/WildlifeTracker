@@ -14,7 +14,7 @@ import NdviExtentSlider from '@/components/NdviExtentSlider';
 import LatestNdviOverlay from '@/components/LatestNdviOverlay';
 import { useAuth, useRequireRole } from '@/lib/authContext';
 import { apiFetch } from '@/lib/api';
-import { divIcon, dotIcon, recentPinIcon, colorForLabel, ensureHeatPlugin, fetchGeoJson, lodgeIcon } from '@/lib/mapIcons';
+import { divIcon, dotIcon, recentPinIcon, colorForLabel, ensureHeatPlugin, fetchGeoJson, lodgeIcon, iconUrlMapFromConfig, configLabelKey, observationIcon } from '@/lib/mapIcons';
 import { buildTrackLayer, trackColor, trackLabel, trackVerticesAsHeatPoints } from '@/lib/trackLayers';
 import { addHomeZoomControl } from '@/lib/homeZoomControl';
 import { attachWeatherPopup } from '@/lib/weather';
@@ -90,6 +90,8 @@ export default function ConcessionMapPage() {
   const [allObservations, setAllObservations] = useState([]);
   const [allTrees, setAllTrees] = useState([]);
   const [allTracking, setAllTracking] = useState([]);
+  const [speciesIconMap, setSpeciesIconMap] = useState(() => new Map());
+  const [incidentIconMap, setIncidentIconMap] = useState(() => new Map());
 
   const [viewMode, setViewMode] = useState('sightings');
   const [dateStart, setDateStart] = useState('');
@@ -169,9 +171,36 @@ export default function ConcessionMapPage() {
       counts.set(label, (counts.get(label) || 0) + 1);
     });
     return Array.from(counts.entries())
-      .map(([label, count]) => ({ label, count, color: colorForLabel(label) }))
+      .map(([label, count]) => ({
+        label,
+        count,
+        color: colorForLabel(label),
+        iconUrl: speciesIconMap.get(configLabelKey(label)) || null,
+      }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  }, [viewMode, allObservations, dateStart, dateEnd, month, year, species]);
+  }, [viewMode, allObservations, dateStart, dateEnd, month, year, species, speciesIconMap]);
+
+  // Incident types currently plotted.
+  const visibleIncidentsLegend = useMemo(() => {
+    if (viewMode !== 'incidents') return [];
+    const filters = { dateStart, dateEnd, month, year };
+    const counts = new Map();
+    allObservations.forEach((o) => {
+      if ((o.category || '').toLowerCase() !== 'incident') return;
+      if (o.latitude == null || o.longitude == null) return;
+      if (!withinDateFilters(o.timestamp, filters)) return;
+      const label = o.incident_type || 'Incident';
+      counts.set(label, (counts.get(label) || 0) + 1);
+    });
+    return Array.from(counts.entries())
+      .map(([label, count]) => ({
+        label,
+        count,
+        color: CATEGORY_COLOR.incident,
+        iconUrl: incidentIconMap.get(configLabelKey(label)) || null,
+      }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+  }, [viewMode, allObservations, dateStart, dateEnd, month, year, incidentIconMap]);
 
   // Tree species currently plotted (respects tree type filter).
   const visibleTreesLegend = useMemo(() => {
@@ -312,16 +341,19 @@ export default function ConcessionMapPage() {
 
       applyBaseVisibility();
 
-      const [treesRes, obsRes, trackRes, roadsBundle] = await Promise.all([
+      const [treesRes, obsRes, trackRes, roadsBundle, configRes] = await Promise.all([
         apiFetch('/api/trees').catch(() => ({ data: [] })),
         apiFetch('/api/observations').catch(() => ({ data: [] })),
         apiFetch('/api/tracking').catch(() => ({ data: [] })),
         loadRoadsDataset().catch(() => ({ roads: [] })),
+        apiFetch('/api/app-config').catch(() => ({ data: { species: [], incidents: [] } })),
       ]);
 
       setAllTrees(treesRes.data || []);
       setAllObservations(obsRes.data || []);
       setAllTracking(trackRes.data || []);
+      setSpeciesIconMap(iconUrlMapFromConfig(configRes.data?.species || []));
+      setIncidentIconMap(iconUrlMapFromConfig(configRes.data?.incidents || []));
 
       const allRoads = roadsBundle.roads || [];
       if (allRoads.length && mapObj.current.baseLayers.roads) {
@@ -409,8 +441,16 @@ export default function ConcessionMapPage() {
           }
         } else {
           const markers = filtered.map((o) => {
-            const color = viewMode === 'sightings' ? colorForLabel(o.animal) : CATEGORY_COLOR[category];
-            const marker = L.marker([o.latitude, o.longitude], { icon: dotIcon(L, color) });
+            const label = viewMode === 'sightings' ? o.animal || 'Unknown' : o.incident_type || 'Incident';
+            const iconUrl =
+              viewMode === 'sightings'
+                ? speciesIconMap.get(configLabelKey(label))
+                : incidentIconMap.get(configLabelKey(label));
+            const fallbackColor =
+              viewMode === 'sightings' ? colorForLabel(label) : CATEGORY_COLOR[category];
+            const marker = L.marker([o.latitude, o.longitude], {
+              icon: observationIcon(L, { label, iconUrl, fallbackColor, size: 28 }),
+            });
             marker.bindPopup(popupHtml(o));
             return marker;
           });
@@ -561,7 +601,7 @@ export default function ConcessionMapPage() {
     return () => {
       cancelled = true;
     };
-  }, [viewMode, dateStart, dateEnd, month, year, species, treeType, displayMode, showRecent, visibleObservations, allTrees, allTracking, fires, fireSensor, focusTarget]);
+  }, [viewMode, dateStart, dateEnd, month, year, species, treeType, displayMode, showRecent, visibleObservations, allTrees, allTracking, fires, fireSensor, focusTarget, speciesIconMap, incidentIconMap]);
 
   const loadFires = useCallback(async () => {
     setFiresLoading(true);
@@ -659,6 +699,7 @@ export default function ConcessionMapPage() {
         <div className="relative flex-1 min-w-0 rounded-portal-lg overflow-hidden border border-portal-border">
           <LeafletMap onReady={handleReady} />
           {viewMode === 'sightings' && <DynamicMapLegend title="Species" items={visibleSpeciesLegend} />}
+          {viewMode === 'incidents' && <DynamicMapLegend title="Incidents" items={visibleIncidentsLegend} />}
           {viewMode === 'trees' && <DynamicMapLegend title="Trees" items={visibleTreesLegend} />}
           {viewMode === 'vehicle' && displayMode !== 'hotspot' && (
             <DynamicMapLegend title="Vehicles" items={trackLegend} />

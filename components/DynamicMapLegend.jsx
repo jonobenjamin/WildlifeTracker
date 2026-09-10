@@ -3,8 +3,9 @@
 import { useState } from 'react';
 
 /**
- * Collapsible colour key for map markers/lines.
+ * Collapsible colour/icon key for map markers/lines.
  * Defaults minimized; shows only entries currently visible for active filters.
+ * Prefer configured icons from App configuration; fall back to colour dots.
  */
 export default function DynamicMapLegend({ title = 'Legend', items }) {
   const [open, setOpen] = useState(false);
@@ -31,10 +32,19 @@ export default function DynamicMapLegend({ title = 'Legend', items }) {
         <div className="px-3.5 pb-3.5 space-y-1.5 border-t border-portal-border pt-2.5 max-h-64 overflow-y-auto">
           {items.map((item) => (
             <div key={item.label} className="flex items-center gap-2 text-sm">
-              <span
-                className="inline-block w-3 h-3 rounded-full flex-shrink-0 border border-white shadow-sm"
-                style={{ background: item.color }}
-              />
+              {item.iconUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={item.iconUrl}
+                  alt=""
+                  className="w-5 h-5 rounded-full object-contain bg-white border border-portal-border flex-shrink-0"
+                />
+              ) : (
+                <span
+                  className="inline-block w-3 h-3 rounded-full flex-shrink-0 border border-white shadow-sm"
+                  style={{ background: item.color }}
+                />
+              )}
               <span className="truncate">{item.label}</span>
               {item.count != null && (
                 <span className="ml-auto text-xs text-portal-text-muted tabular-nums">{item.count}</span>

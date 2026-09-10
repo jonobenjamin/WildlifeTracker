@@ -35,6 +35,20 @@ function requireAdmin(req, res) {
   return true;
 }
 
+/** Portal roles that may read catalogs (map icons). Mutations stay admin-only. */
+function requirePortalReader(req, res) {
+  const role = normalizeRole(req.authRole);
+  if (!['admin', 'guide', 'researcher'].includes(role)) {
+    res.status(403).json({
+      success: false,
+      error: 'Forbidden',
+      message: 'Sign in required to read app configuration',
+    });
+    return false;
+  }
+  return true;
+}
+
 function cleanStringList(value) {
   if (!Array.isArray(value)) return [];
   return value.map((v) => String(v || '').trim()).filter(Boolean);
@@ -121,8 +135,9 @@ module.exports = (db) => {
 
   router.get('/', async (req, res) => {
     try {
-      if (!requireAdmin(req, res)) return;
+      if (!requirePortalReader(req, res)) return;
       if (!db) return res.status(503).json({ success: false, error: 'Database not available' });
+      // Seed once from defaults so the map has icons even before an admin visits App configuration.
       const seeded = await ensureSeeded(db);
       const [species, incidents] = await Promise.all([
         listCollection(db, SPECIES_COLLECTION),
