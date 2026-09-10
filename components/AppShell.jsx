@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: '/map-users', label: 'Wildlife Map', roles: ['admin'] },
   { href: '/admin', label: 'Admin', roles: ['admin'] },
   { href: '/data-management', label: 'Data Management', roles: ['admin'] },
+  { href: '/app-configuration', label: 'App configuration', roles: ['admin'] },
   { href: '/reports', label: 'Reporting', roles: ['admin'] },
   { href: '/vehicles', label: 'Vehicle Tracker', roles: ['admin'] },
   { href: '/profile', label: 'Profile', roles: ['admin', 'guide', 'researcher'] },
