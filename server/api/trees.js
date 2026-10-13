@@ -76,6 +76,13 @@ module.exports = (db) => {
 
   router.use(validateApiKey);
 
+  function lastWrappedStatus(data) {
+    const hist = data && data.wrappedHistory;
+    if (!Array.isArray(hist) || !hist.length) return null;
+    const status = hist[hist.length - 1] && hist[hist.length - 1].status;
+    return WRAPPED_STATUSES.includes(status) ? status : null;
+  }
+
   // GET /api/trees — all trees for map sync
   router.get('/', async (req, res) => {
     try {
@@ -84,13 +91,42 @@ module.exports = (db) => {
       }
 
       const snapshot = await db.collection('trees').get();
+      const now = new Date().toISOString();
       const trees = [];
+      const pendingWrites = [];
       snapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.latitude !== undefined && data.longitude !== undefined) {
-          trees.push({ id: doc.id, ...data });
+        const data = doc.data() || {};
+        if (data.latitude === undefined || data.longitude === undefined) return;
+        if (!lastWrappedStatus(data)) {
+          const hist = Array.isArray(data.wrappedHistory) ? [...data.wrappedHistory] : [];
+          hist.push(wrappedEntry('Wrapped', now));
+          data.wrappedHistory = hist;
+          pendingWrites.push({ ref: doc.ref, hist });
         }
+        trees.push({ id: doc.id, ...data });
       });
+
+      if (pendingWrites.length) {
+        let batch = db.batch();
+        let n = 0;
+        const commits = [];
+        pendingWrites.forEach(({ ref, hist }) => {
+          batch.update(ref, { wrappedHistory: hist, updatedAt: now });
+          n += 1;
+          if (n >= 400) {
+            commits.push(batch.commit());
+            batch = db.batch();
+            n = 0;
+          }
+        });
+        if (n) commits.push(batch.commit());
+        try {
+          await Promise.all(commits);
+        } catch (writeErr) {
+          console.warn('Tree unknown→Wrapped backfill:', writeErr.message);
+        }
+      }
+
       const filtered = filterTreesOrRoadsForRead(req, trees);
       filtered.sort((a, b) => {
         const ta = a.updatedAt || a.createdAt || '';
@@ -178,6 +214,9 @@ module.exports = (db) => {
           .map(h => wrappedEntry(h.status, h.date || now));
       } else if (wrappedStatus && WRAPPED_STATUSES.includes(wrappedStatus)) {
         treeData.wrappedHistory.push(wrappedEntry(wrappedStatus, now));
+      }
+      if (!treeData.wrappedHistory.length) {
+        treeData.wrappedHistory.push(wrappedEntry('Wrapped', now));
       }
 
       if (Array.isArray(req.body.dbhHistory) && req.body.dbhHistory.length > 0) {

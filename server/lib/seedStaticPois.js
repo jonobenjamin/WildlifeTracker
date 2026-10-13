@@ -1,18 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 
-// Keep this require so Vercel traces the GeoJSON into the serverless bundle.
-let bundledGeojson = null;
-try {
-  bundledGeojson = require('../data/KPR_POI.geojson');
-} catch (_) {
-  bundledGeojson = null;
-}
-
 function loadKprPoiGeojson() {
-  if (bundledGeojson && Array.isArray(bundledGeojson.features)) return bundledGeojson;
   const candidates = [
     path.join(__dirname, '../data/KPR_POI.geojson'),
+    path.join(process.cwd(), 'server/data/KPR_POI.geojson'),
     path.join(process.cwd(), 'public/data/geojson/KPR_POI.geojson'),
     path.join(process.cwd(), 'WildlifeTracker/public/data/geojson/KPR_POI.geojson'),
   ];

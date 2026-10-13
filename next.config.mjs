@@ -15,6 +15,13 @@ const nextConfig = {
     '/pages/api/[[...path]]': ['./server/data/**/*'],
     '/api/[[...path]]': ['./server/data/**/*'],
   },
+  webpack: (config) => {
+    config.module.rules.push({
+      test: /\.geojson$/,
+      type: 'json',
+    });
+    return config;
+  },
 };
 
 export default nextConfig;

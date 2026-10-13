@@ -36,8 +36,8 @@ const LEGEND_ITEMS = [
 
 function treeStatusOf(t) {
   const hist = t?.wrappedHistory;
-  if (!Array.isArray(hist) || !hist.length) return 'Unknown';
-  return hist[hist.length - 1]?.status || 'Unknown';
+  if (!Array.isArray(hist) || !hist.length) return 'Wrapped';
+  return hist[hist.length - 1]?.status || 'Wrapped';
 }
 
 function treeStatusColor(status) {
