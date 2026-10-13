@@ -366,22 +366,32 @@ export default function ConcessionMapPage() {
       }
 
       const poiGroup = L.layerGroup();
-      if (poi) {
+      const apiList = apiPois.data || [];
+      const addPoiMarker = (lat, lng, name, notes) => {
+        const marker = L.marker([lat, lng], { icon: divIcon(L, 'poi') });
+        const extra = notes ? `<br>${escapeHtml(notes)}` : '';
+        marker.bindPopup(`<strong>${escapeHtml(name || 'Point of interest')}</strong>${extra}`);
+        poiGroup.addLayer(marker);
+      };
+      if (apiList.length) {
+        apiList.forEach((p) => {
+          if (p.latitude == null || p.longitude == null) return;
+          addPoiMarker(p.latitude, p.longitude, p.name, p.notes);
+        });
+      } else if (poi) {
         L.geoJSON(poi, {
-          pointToLayer: (feature, latlng) => L.marker(latlng, { icon: divIcon(L, 'poi') }),
-          onEachFeature: (feature, layer) => {
-            const name = feature.properties?.name || feature.properties?.['what it is'] || 'Point of interest';
-            layer.bindPopup(`<strong>${escapeHtml(name)}</strong>`);
+          pointToLayer: (feature, latlng) => {
+            const name =
+              feature.properties?.Name ||
+              feature.properties?.name ||
+              feature.properties?.['what it is'] ||
+              'Point of interest';
+            const marker = L.marker(latlng, { icon: divIcon(L, 'poi') });
+            marker.bindPopup(`<strong>${escapeHtml(name)}</strong>`);
+            return marker;
           },
         }).addTo(poiGroup);
       }
-      (apiPois.data || []).forEach((p) => {
-        if (p.latitude == null || p.longitude == null) return;
-        const marker = L.marker([p.latitude, p.longitude], { icon: divIcon(L, 'poi') });
-        const extra = p.notes ? `<br>${escapeHtml(p.notes)}` : '';
-        marker.bindPopup(`<strong>${escapeHtml(p.name || 'Point of interest')}</strong>${extra}`);
-        poiGroup.addLayer(marker);
-      });
       mapObj.current.baseLayers.poi = poiGroup;
 
       applyBaseVisibility();
@@ -426,7 +436,7 @@ export default function ConcessionMapPage() {
             const mid = roadMidpoint(latlngs);
             if (mid) {
               const label = L.marker(mid, {
-                icon: roadNameIcon(L, name),
+                icon: roadNameIcon(L, name, latlngs),
                 interactive: false,
                 keyboard: false,
               });

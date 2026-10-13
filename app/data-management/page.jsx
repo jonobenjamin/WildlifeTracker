@@ -63,9 +63,18 @@ function itemSubtitle(type, item) {
     const src = (item.source || '').toLowerCase() === 'user' ? 'User' : 'Base';
     return `${src} · ${item.user || '—'} · ${when ? dayjs(when).format('DD MMM YYYY HH:mm') : '—'}`;
   }
-  if (type === 'trees' || type === 'pois') {
+  if (type === 'trees') {
     const when = item.updatedAt || item.createdAt;
     return `${item.user || '—'} · ${when ? dayjs(when).format('DD MMM YYYY HH:mm') : '—'}`;
+  }
+  if (type === 'pois') {
+    const when = item.updatedAt || item.createdAt;
+    const src =
+      String(item.source || '').toLowerCase() === 'static' ||
+      String(item.id || '').startsWith('static_poi_')
+        ? 'Catalogue'
+        : 'Added';
+    return `${src} · ${item.user || '—'} · ${when ? dayjs(when).format('DD MMM YYYY HH:mm') : '—'}`;
   }
   return `${item.user || '—'} · ${item.timestamp ? dayjs(item.timestamp).format('DD MMM YYYY HH:mm') : '—'}`;
 }

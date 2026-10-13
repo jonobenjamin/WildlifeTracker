@@ -7,6 +7,7 @@ const {
   resolveCreatedByUidForCreate,
   deletedByFromAuth,
 } = require('../lib/rbac');
+const { ensureStaticPoisSeeded } = require('../lib/seedStaticPois');
 
 const router = express.Router();
 
@@ -31,12 +32,14 @@ module.exports = (db) => {
   const validateApiKey = createFieldAuth(db);
   router.use(validateApiKey);
 
-  // GET /api/pois — all user-added points of interest
+  // GET /api/pois — full catalogue (seeded GeoJSON + appended field/web adds)
   router.get('/', async (req, res) => {
     try {
       if (!db) {
         return res.status(503).json({ success: false, error: 'Database not available' });
       }
+
+      await ensureStaticPoisSeeded(db);
 
       const snapshot = await db.collection('pois').get();
       const pois = [];
@@ -87,6 +90,7 @@ module.exports = (db) => {
         notes: notes || null,
         latitude: lat,
         longitude: lon,
+        source: 'user',
         user: req.body.user || null,
         createdByUid,
         localId: req.body.localId || null,

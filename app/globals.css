@@ -73,6 +73,11 @@
   width: auto !important;
   height: auto !important;
 }
+.kpr-road-label-rot {
+  transform-origin: center center;
+  white-space: nowrap;
+  pointer-events: none;
+}
 .kpr-road-label span {
   display: inline-block;
   max-width: 160px;
