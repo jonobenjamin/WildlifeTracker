@@ -302,7 +302,10 @@ export default function DataManagementPage() {
       } else if (dataType === 'pois') {
         await apiFetch(`/api/pois/${id}`, {
           method: 'PATCH',
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            ...payload,
+            source: editing.source || (String(id).startsWith('static_poi_') ? 'static' : 'user'),
+          }),
         });
       }
       setEditing(null);
@@ -364,7 +367,9 @@ export default function DataManagementPage() {
             Refresh
           </button>
           <p className="text-xs text-portal-text-muted pb-2.5 ml-auto">
-            Select a row or map feature to highlight both. Edit attributes or delete (archived to backup).
+            {dataType === 'pois'
+              ? 'One catalogue: uploaded reserve points plus anything added in the field. Edit and delete like trees.'
+              : 'Select a row or map feature to highlight both. Edit attributes or delete (archived to backup).'}
           </p>
         </div>
 

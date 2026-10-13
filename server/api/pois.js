@@ -7,7 +7,7 @@ const {
   resolveCreatedByUidForCreate,
   deletedByFromAuth,
 } = require('../lib/rbac');
-const { ensureStaticPoisSeeded } = require('../lib/seedStaticPois');
+const { ensureStaticPoisSeeded, mergePoiCatalogue } = require('../lib/seedStaticPois');
 
 const router = express.Router();
 
@@ -39,14 +39,15 @@ module.exports = (db) => {
         return res.status(503).json({ success: false, error: 'Database not available' });
       }
 
-      await ensureStaticPoisSeeded(db);
+      try {
+        await ensureStaticPoisSeeded(db);
+      } catch (seedErr) {
+        console.warn('POI catalogue seed:', seedErr.message);
+      }
 
-      const snapshot = await db.collection('pois').get();
-      const pois = [];
-      snapshot.forEach((doc) => {
-        const shaped = poiToClient(doc.id, doc.data() || {});
-        if (shaped) pois.push(shaped);
-      });
+      const pois = (await mergePoiCatalogue(db))
+        .map((p) => poiToClient(p.id, p))
+        .filter(Boolean);
       const filtered = filterTreesOrRoadsForRead(req, pois);
       filtered.sort((a, b) => {
         const an = String(a.name || '').toLowerCase();
@@ -110,7 +111,7 @@ module.exports = (db) => {
     }
   });
 
-  // PATCH /api/pois/:id
+  // PATCH /api/pois/:id — update, or upsert a catalogue (GeoJSON) point on first edit
   router.patch('/:id', async (req, res) => {
     try {
       if (!db) {
@@ -120,8 +121,39 @@ module.exports = (db) => {
       const { id } = req.params;
       const ref = db.collection('pois').doc(id);
       const existing = await ref.get();
+      const now = new Date().toISOString();
+      const isCatalogue = String(id).startsWith('static_poi_');
+
       if (!existing.exists) {
-        return res.status(404).json({ success: false, error: 'Point of interest not found' });
+        const name = String(req.body.name || req.body.label || '').trim();
+        const lat = toCoord(req.body.latitude);
+        const lon = toCoord(req.body.longitude);
+        if (!isCatalogue || !name || lat == null || lon == null) {
+          return res.status(404).json({ success: false, error: 'Point of interest not found' });
+        }
+        const provisional = { createdByUid: null, source: 'static' };
+        if (!assertCanMutateOwnedRecord(req, res, provisional, 'point of interest')) {
+          return;
+        }
+        const doc = {
+          name,
+          notes: req.body.notes != null ? String(req.body.notes).trim() || null : null,
+          latitude: lat,
+          longitude: lon,
+          source: 'static',
+          user: req.body.user !== undefined ? req.body.user : 'KPR catalogue',
+          createdByUid: null,
+          localId: id,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await ref.set(doc);
+        try {
+          await db.collection('poi_tombstones').doc(id).delete();
+        } catch {
+          /* ignore */
+        }
+        return res.json({ success: true, id, data: poiToClient(id, doc), created: true });
       }
 
       const current = existing.data() || {};
@@ -129,7 +161,7 @@ module.exports = (db) => {
         return;
       }
 
-      const updates = { updatedAt: new Date().toISOString() };
+      const updates = { updatedAt: now };
       if (req.body.name != null || req.body.label != null) {
         const name = String(req.body.name || req.body.label || '').trim();
         if (name) updates.name = name;
@@ -161,19 +193,34 @@ module.exports = (db) => {
       const { id } = req.params;
       const ref = db.collection('pois').doc(id);
       const existing = await ref.get();
-      if (!existing.exists) {
-        return res.status(404).json({ success: false, error: 'Point of interest not found' });
-      }
-      if (!assertCanMutateOwnedRecord(req, res, existing.data() || {}, 'point of interest')) {
+      const isCatalogue = String(id).startsWith('static_poi_');
+      const deletedBy = deletedByFromAuth(req);
+      const authDoc = existing.exists
+        ? existing.data() || {}
+        : { createdByUid: null, source: 'static' };
+      if (!assertCanMutateOwnedRecord(req, res, authDoc, 'point of interest')) {
         return;
       }
 
-      const result = await archiveAndDelete(db, {
-        collection: 'pois',
-        id,
-        deletedBy: deletedByFromAuth(req),
-        dataType: 'pois',
-      });
+      let result = { success: true, archived: false, originalId: id, dataType: 'pois' };
+      if (existing.exists) {
+        result = await archiveAndDelete(db, {
+          collection: 'pois',
+          id,
+          deletedBy,
+          dataType: 'pois',
+        });
+      } else if (!isCatalogue) {
+        return res.status(404).json({ success: false, error: 'Point of interest not found' });
+      }
+
+      if (isCatalogue) {
+        await db.collection('poi_tombstones').doc(id).set({
+          deletedAt: new Date().toISOString(),
+          deletedBy,
+        });
+        result.tombstoned = true;
+      }
       res.json(result);
     } catch (error) {
       console.error('DELETE /api/pois error:', error);

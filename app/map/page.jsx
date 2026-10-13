@@ -20,7 +20,7 @@ import { addHomeZoomControl } from '@/lib/homeZoomControl';
 import { attachWeatherPopup } from '@/lib/weather';
 import { loadRoadsDataset } from '@/lib/roadsDataset';
 import { isMapViewAllowed, allowedMapViews, canViewObservationCategory } from '@/lib/roles';
-import { roadLineColor, roadLineWeight, roadMidpoint, roadNameIcon } from '@/lib/roadStyle';
+import { roadLineColor, roadLineWeight, roadLabelHalves, roadNameIcon, applyRoadLabelZoom, ROAD_NAME_MIN_ZOOM } from '@/lib/roadStyle';
 
 const HOME_CAMPS = ['tau camp', 'little sable camp'];
 const HOME_FIT = { padding: [60, 60], maxZoom: 13 };
@@ -297,7 +297,11 @@ export default function ConcessionMapPage() {
     if (!map) return;
     Object.entries(baseLayers).forEach(([key, layer]) => {
       if (!layer) return;
-      const shouldShow = key === 'roadNames' ? toggles.roads && toggles.roadNames : toggles[key];
+      const z = map.getZoom ? map.getZoom() : 14;
+      const shouldShow =
+        key === 'roadNames'
+          ? toggles.roads && toggles.roadNames && z >= ROAD_NAME_MIN_ZOOM
+          : toggles[key];
       const has = map.hasLayer(layer);
       if (shouldShow && !has) map.addLayer(layer);
       if (!shouldShow && has) map.removeLayer(layer);
@@ -308,15 +312,28 @@ export default function ConcessionMapPage() {
     applyBaseVisibility();
   }, [toggles, applyBaseVisibility]);
 
+  useEffect(() => {
+    const map = mapReady?.map || mapObj.current.map;
+    if (!map?.on) return undefined;
+    const onZoom = () => {
+      applyRoadLabelZoom(map);
+      applyBaseVisibility();
+    };
+    map.on('zoomend', onZoom);
+    onZoom();
+    return () => {
+      map.off('zoomend', onZoom);
+    };
+  }, [mapReady, applyBaseVisibility]);
+
   const handleReady = useCallback(async (map, L) => {
     mapObj.current.map = map;
     mapObj.current.L = L;
     setMapReady({ map, L });
     try {
-      const [boundary, camps, poi, apiPois] = await Promise.all([
+      const [boundary, camps, apiPois] = await Promise.all([
         fetchGeoJson('/data/geojson/Consession_boundary.geojson'),
         fetchGeoJson('/data/geojson/Camps.geojson'),
-        fetchGeoJson('/data/geojson/KPR_POI.geojson').catch(() => null),
         apiFetch('/api/pois').catch(() => ({ data: [] })),
       ]);
 
@@ -366,32 +383,13 @@ export default function ConcessionMapPage() {
       }
 
       const poiGroup = L.layerGroup();
-      const apiList = apiPois.data || [];
-      const addPoiMarker = (lat, lng, name, notes) => {
-        const marker = L.marker([lat, lng], { icon: divIcon(L, 'poi') });
-        const extra = notes ? `<br>${escapeHtml(notes)}` : '';
-        marker.bindPopup(`<strong>${escapeHtml(name || 'Point of interest')}</strong>${extra}`);
+      (apiPois.data || []).forEach((p) => {
+        if (p.latitude == null || p.longitude == null) return;
+        const marker = L.marker([p.latitude, p.longitude], { icon: divIcon(L, 'poi') });
+        const extra = p.notes ? `<br>${escapeHtml(p.notes)}` : '';
+        marker.bindPopup(`<strong>${escapeHtml(p.name || 'Point of interest')}</strong>${extra}`);
         poiGroup.addLayer(marker);
-      };
-      if (apiList.length) {
-        apiList.forEach((p) => {
-          if (p.latitude == null || p.longitude == null) return;
-          addPoiMarker(p.latitude, p.longitude, p.name, p.notes);
-        });
-      } else if (poi) {
-        L.geoJSON(poi, {
-          pointToLayer: (feature, latlng) => {
-            const name =
-              feature.properties?.Name ||
-              feature.properties?.name ||
-              feature.properties?.['what it is'] ||
-              'Point of interest';
-            const marker = L.marker(latlng, { icon: divIcon(L, 'poi') });
-            marker.bindPopup(`<strong>${escapeHtml(name)}</strong>`);
-            return marker;
-          },
-        }).addTo(poiGroup);
-      }
+      });
       mapObj.current.baseLayers.poi = poiGroup;
 
       applyBaseVisibility();
@@ -433,15 +431,14 @@ export default function ConcessionMapPage() {
           );
           mapObj.current.baseLayers.roads.addLayer(line);
           if (name.trim()) {
-            const mid = roadMidpoint(latlngs);
-            if (mid) {
-              const label = L.marker(mid, {
-                icon: roadNameIcon(L, name, latlngs),
+            roadLabelHalves(latlngs).forEach((half) => {
+              const label = L.marker(half.mid, {
+                icon: roadNameIcon(L, name, half.a, half.b),
                 interactive: false,
                 keyboard: false,
               });
               mapObj.current.baseLayers.roadNames.addLayer(label);
-            }
+            });
           }
         });
       }

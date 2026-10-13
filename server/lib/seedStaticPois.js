@@ -10,7 +10,7 @@ try {
 }
 
 function loadKprPoiGeojson() {
-  if (bundledGeojson) return bundledGeojson;
+  if (bundledGeojson && Array.isArray(bundledGeojson.features)) return bundledGeojson;
   const candidates = [
     path.join(__dirname, '../data/KPR_POI.geojson'),
     path.join(process.cwd(), 'public/data/geojson/KPR_POI.geojson'),
@@ -41,55 +41,116 @@ function poiNotesFromProps(props) {
   return null;
 }
 
+function geojsonFeaturesAsPois() {
+  const geo = loadKprPoiGeojson();
+  const features = Array.isArray(geo?.features) ? geo.features : [];
+  const out = [];
+  features.forEach((feature, i) => {
+    const geom = feature?.geometry;
+    if (!geom || geom.type !== 'Point' || !Array.isArray(geom.coordinates)) return;
+    const lng = Number(geom.coordinates[0]);
+    const lat = Number(geom.coordinates[1]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const props = feature.properties || {};
+    const id = `static_poi_${i}`;
+    out.push({
+      id,
+      name: poiNameFromProps(props),
+      notes: poiNotesFromProps(props),
+      latitude: lat,
+      longitude: lng,
+      source: 'static',
+      createdByUid: null,
+      localId: id,
+      user: 'KPR catalogue',
+      createdAt: null,
+      updatedAt: null,
+    });
+  });
+  return out;
+}
+
+async function listHiddenPoiIds(db) {
+  if (!db) return [];
+  try {
+    const snap = await db.collection('poi_tombstones').get();
+    return snap.docs.map((d) => d.id);
+  } catch (e) {
+    console.warn('listHiddenPoiIds:', e.message);
+    return [];
+  }
+}
+
 /**
- * One-time seed of KPR_POI.geojson into Firestore `pois`.
- * Uses poi_seed_meta/kpr_geojson so admin edits are never overwritten.
+ * One catalogue: uploaded GeoJSON + Firestore adds/edits.
+ * Tombstoned static ids stay hidden. Firestore wins on id overlap.
+ */
+async function mergePoiCatalogue(db) {
+  const byId = new Map();
+  const hidden = new Set(await listHiddenPoiIds(db));
+
+  for (const p of geojsonFeaturesAsPois()) {
+    if (hidden.has(p.id)) continue;
+    byId.set(p.id, p);
+  }
+
+  if (db) {
+    try {
+      const snapshot = await db.collection('pois').get();
+      snapshot.forEach((doc) => {
+        if (hidden.has(doc.id)) return;
+        const data = doc.data() || {};
+        const lat = Number(data.latitude);
+        const lon = Number(data.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        byId.set(doc.id, {
+          id: doc.id,
+          ...data,
+          latitude: lat,
+          longitude: lon,
+        });
+      });
+    } catch (e) {
+      console.warn('mergePoiCatalogue firestore:', e.message);
+    }
+  }
+
+  return Array.from(byId.values());
+}
+
+/**
+ * Best-effort write of missing static_poi_* docs so edits persist in Firebase.
+ * Never overwrites a doc that already exists (admin edits stay).
  */
 async function ensureStaticPoisSeeded(db) {
   if (!db) return { seeded: false, count: 0 };
-  const metaRef = db.collection('poi_seed_meta').doc('kpr_geojson');
-  const meta = await metaRef.get();
-  if (meta.exists) return { seeded: false, count: meta.data()?.count || 0 };
-
-  const geo = loadKprPoiGeojson();
-  const features = Array.isArray(geo?.features) ? geo.features : [];
-  if (!features.length) {
+  const geoPois = geojsonFeaturesAsPois();
+  if (!geoPois.length) {
     console.warn('POI catalogue seed skipped: KPR_POI.geojson not found');
     return { seeded: false, count: 0 };
   }
 
+  const probe = await db.collection('pois').doc('static_poi_0').get();
+  if (probe.exists) return { seeded: false, count: geoPois.length };
+
   const now = new Date().toISOString();
-  await db.runTransaction(async (t) => {
-    const again = await t.get(metaRef);
-    if (again.exists) return;
-    features.forEach((feature, i) => {
-      const geom = feature?.geometry;
-      if (!geom || geom.type !== 'Point' || !Array.isArray(geom.coordinates)) return;
-      const lng = Number(geom.coordinates[0]);
-      const lat = Number(geom.coordinates[1]);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-      const id = `static_poi_${i}`;
-      const props = feature.properties || {};
-      t.set(db.collection('pois').doc(id), {
-        name: poiNameFromProps(props),
-        notes: poiNotesFromProps(props),
-        latitude: lat,
-        longitude: lng,
-        source: 'static',
-        createdByUid: null,
-        localId: id,
-        user: 'KPR catalogue',
-        createdAt: now,
-        updatedAt: now,
-      });
-    });
-    t.set(metaRef, {
-      seededAt: now,
-      count: features.length,
-      source: 'KPR_POI.geojson',
-    });
+  const batch = db.batch();
+  geoPois.forEach((p) => {
+    const { id, ...rest } = p;
+    batch.set(
+      db.collection('pois').doc(id),
+      { ...rest, createdAt: now, updatedAt: now },
+      { merge: true }
+    );
   });
-  return { seeded: true, count: features.length };
+  await batch.commit();
+  return { seeded: true, count: geoPois.length };
 }
 
-module.exports = { ensureStaticPoisSeeded, loadKprPoiGeojson };
+module.exports = {
+  ensureStaticPoisSeeded,
+  loadKprPoiGeojson,
+  geojsonFeaturesAsPois,
+  mergePoiCatalogue,
+  listHiddenPoiIds,
+};
