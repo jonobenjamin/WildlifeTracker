@@ -9,6 +9,7 @@ import { apiFetch } from '@/lib/api';
 import { colorForLabel, dotIcon, fetchGeoJson } from '@/lib/mapIcons';
 import { loadRoadsDataset } from '@/lib/roadsDataset';
 import { extractLatLngs, trackColor, trackLabel } from '@/lib/trackLayers';
+import { isUserRoad, roadLineColor } from '@/lib/roadStyle';
 
 const DATA_TYPES = [
   { value: 'sightings', label: 'Sightings' },
@@ -17,6 +18,7 @@ const DATA_TYPES = [
   { value: 'patrol', label: 'Patrol tracking' },
   { value: 'roads', label: 'Road segments' },
   { value: 'trees', label: 'Trees' },
+  { value: 'pois', label: 'Points of interest' },
 ];
 
 const isTrackingType = (type) => type === 'vehicle' || type === 'patrol';
@@ -43,6 +45,7 @@ function itemTitle(type, item) {
   if (isTrackingType(type)) return trackLabel(item);
   if (type === 'roads') return item.name || item.Roads || 'Road';
   if (type === 'trees') return item.species === 'Other' ? item.speciesOther || 'Other tree' : item.species || 'Tree';
+  if (type === 'pois') return item.name || 'Point of interest';
   return 'Item';
 }
 
@@ -60,7 +63,7 @@ function itemSubtitle(type, item) {
     const src = (item.source || '').toLowerCase() === 'user' ? 'User' : 'Base';
     return `${src} · ${item.user || '—'} · ${when ? dayjs(when).format('DD MMM YYYY HH:mm') : '—'}`;
   }
-  if (type === 'trees') {
+  if (type === 'trees' || type === 'pois') {
     const when = item.updatedAt || item.createdAt;
     return `${item.user || '—'} · ${when ? dayjs(when).format('DD MMM YYYY HH:mm') : '—'}`;
   }
@@ -112,6 +115,9 @@ export default function DataManagementPage() {
         // Same model as the phone: GeoJSON base network + synced drawn roads.
         const { roads } = await loadRoadsDataset();
         setItems(roads);
+      } else if (dataType === 'pois') {
+        const res = await apiFetch('/api/pois');
+        setItems(res.data || []);
       }
     } catch (e) {
       setError(e.message || 'Failed to load data');
@@ -161,9 +167,9 @@ export default function DataManagementPage() {
       let layer;
       if (dataType === 'roads') {
         const latlngs = item.coordinates.map(([lng, lat]) => [lat, lng]);
-        const isUser = (item.source || '').toLowerCase() === 'user';
+        const isUser = isUserRoad(item);
         layer = L.polyline(latlngs, {
-          color: selectedId === item.id ? '#b42318' : isUser ? '#1565C0' : '#8a6d3b',
+          color: selectedId === item.id ? '#b42318' : roadLineColor(item),
           weight: selectedId === item.id ? 5 : isUser ? 3 : 2,
           opacity: 0.9,
         });
@@ -182,7 +188,9 @@ export default function DataManagementPage() {
             ? colorForLabel(item.animal)
             : dataType === 'incidents'
               ? '#b42318'
-              : colorForLabel(item.species);
+              : dataType === 'pois'
+                ? '#e65100'
+                : colorForLabel(item.species);
         const size = selectedId === item.id ? 18 : 12;
         layer = L.marker([item.latitude, item.longitude], {
           icon: dotIcon(L, selectedId === item.id ? '#111827' : color, size),
@@ -220,9 +228,9 @@ export default function DataManagementPage() {
             weight: selected ? 5 : 3,
           });
         } else {
-          const isUser = (item?.source || '').toLowerCase() === 'user';
+          const isUser = isUserRoad(item);
           layer.setStyle({
-            color: selected ? '#b42318' : isUser ? '#1565C0' : '#8a6d3b',
+            color: selected ? '#b42318' : roadLineColor(item || {}),
             weight: selected ? 5 : isUser ? 3 : 2,
           });
         }
@@ -234,7 +242,9 @@ export default function DataManagementPage() {
             ? colorForLabel(item.animal)
             : dataType === 'incidents'
               ? '#b42318'
-              : colorForLabel(item.species);
+              : dataType === 'pois'
+                ? '#e65100'
+                : colorForLabel(item.species);
         layer.setIcon(dotIcon(L, selected ? '#111827' : color, selected ? 18 : 12));
       }
       if (selected) {
@@ -280,6 +290,11 @@ export default function DataManagementPage() {
             source: editing.source || 'static',
           }),
         });
+      } else if (dataType === 'pois') {
+        await apiFetch(`/api/pois/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
       }
       setEditing(null);
       await loadItems();
@@ -301,9 +316,11 @@ export default function DataManagementPage() {
           ? `/api/trees/${deleting.id}`
           : dataType === 'roads'
             ? `/api/roads/${deleting.id}`
-            : isTrackingType(dataType)
-              ? `/api/tracking/${deleting.id}`
-              : `/api/observations/${deleting.id}`;
+            : dataType === 'pois'
+              ? `/api/pois/${deleting.id}`
+              : isTrackingType(dataType)
+                ? `/api/tracking/${deleting.id}`
+                : `/api/observations/${deleting.id}`;
       await apiFetch(`${path}?deletedBy=${encodeURIComponent(deletedBy)}`, {
         method: 'DELETE',
         body: JSON.stringify({ deletedBy }),
@@ -578,6 +595,17 @@ function EditModal({ dataType, item, busy, onClose, onSave }) {
               </p>
             </>
           )}
+          {dataType === 'pois' && (
+            <>
+              <Field label="Name" value={form.name} onChange={(v) => setField('name', v)} required />
+              <Field label="Recorded by" value={form.user} onChange={(v) => setField('user', v)} />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Latitude" type="number" value={form.latitude} onChange={(v) => setField('latitude', v)} />
+                <Field label="Longitude" type="number" value={form.longitude} onChange={(v) => setField('longitude', v)} />
+              </div>
+              <Field label="Notes" value={form.notes} onChange={(v) => setField('notes', v)} textarea />
+            </>
+          )}
           {error && <p className="text-sm text-portal-danger">{error}</p>}
           <div className="flex gap-3 pt-2">
             <button type="submit" className="kpr-btn flex-1" disabled={busy}>
@@ -657,6 +685,15 @@ function initialForm(dataType, item) {
       notes: item.notes || '',
     };
   }
+  if (dataType === 'pois') {
+    return {
+      name: item.name || '',
+      user: item.user || '',
+      latitude: item.latitude ?? '',
+      longitude: item.longitude ?? '',
+      notes: item.notes || '',
+    };
+  }
   return {
     name: item.name || item.Roads || '',
     user: item.user || '',
@@ -703,36 +740,25 @@ function sanitizeForm(dataType, form) {
       out.vehicle = String(out.vehicle || '').trim();
     }
   }
-  if (dataType === 'roads' && out.name) out.name = String(out.name).trim();
+  if ((dataType === 'roads' || dataType === 'pois') && out.name) out.name = String(out.name).trim();
   return out;
 }
 
 function DeleteConfirmModal({ title, busy, onClose, onConfirm }) {
-  const [typed, setTyped] = useState('');
-  const ok = typed.trim().toLowerCase() === 'delete';
-
   return (
     <div className="fixed inset-0 bg-black/40 z-[2000] grid place-items-center p-4" onClick={onClose}>
       <div className="kpr-card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-base font-semibold mb-2 text-portal-danger">Delete record</h3>
-        <p className="text-sm text-portal-text-muted mb-4">
-          This will remove <strong className="text-portal-text">{title}</strong> from live data and move a copy to backup storage
-          (<code className="text-xs">deleted_records</code>), including who deleted it and when.
+        <h3 className="text-base font-semibold mb-2 text-portal-danger">Delete record?</h3>
+        <p className="text-sm text-portal-text-muted mb-5">
+          Are you sure you want to delete <strong className="text-portal-text">{title}</strong>? A copy is kept in backup
+          storage (<code className="text-xs">deleted_records</code>).
         </p>
-        <label className="kpr-label">Type delete to confirm</label>
-        <input
-          className="kpr-input mb-4"
-          value={typed}
-          onChange={(e) => setTyped(e.target.value)}
-          placeholder="delete"
-          autoFocus
-        />
         <div className="flex gap-3">
-          <button type="button" className="kpr-btn flex-1 !bg-portal-danger" disabled={!ok || busy} onClick={onConfirm}>
-            {busy ? 'Deleting…' : 'Delete permanently'}
+          <button type="button" className="kpr-btn flex-1 !bg-portal-danger" disabled={busy} onClick={onConfirm}>
+            {busy ? 'Deleting…' : 'Yes, delete'}
           </button>
           <button type="button" className="kpr-btn-secondary flex-1" onClick={onClose} disabled={busy}>
-            Cancel
+            No
           </button>
         </div>
       </div>

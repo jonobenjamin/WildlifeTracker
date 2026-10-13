@@ -20,17 +20,39 @@ import { addHomeZoomControl } from '@/lib/homeZoomControl';
 import { attachWeatherPopup } from '@/lib/weather';
 import { loadRoadsDataset } from '@/lib/roadsDataset';
 import { isMapViewAllowed, allowedMapViews, canViewObservationCategory } from '@/lib/roles';
+import { roadLineColor, roadLineWeight, roadMidpoint, roadNameIcon } from '@/lib/roadStyle';
 
 const HOME_CAMPS = ['tau camp', 'little sable camp'];
 const HOME_FIT = { padding: [60, 60], maxZoom: 13 };
 
 const LEGEND_ITEMS = [
   { key: 'roads', label: 'Roads', emoji: '🛣️' },
+  { key: 'roadNames', label: 'Road names', emoji: '🔤' },
   { key: 'camps', label: 'Camps', emoji: '🏕️' },
   { key: 'poi', label: 'Points of interest', emoji: '📍' },
   { key: 'water', label: 'Water (latest)', emoji: '💧' },
   { key: 'ndvi', label: 'NDVI (latest)', emoji: '🌿' },
 ];
+
+function treeStatusOf(t) {
+  const hist = t?.wrappedHistory;
+  if (!Array.isArray(hist) || !hist.length) return 'Unknown';
+  return hist[hist.length - 1]?.status || 'Unknown';
+}
+
+function treeStatusColor(status) {
+  switch (status) {
+    case 'Mesh damaged':
+      return '#b91c1c';
+    case 'To be Wrapped':
+      return '#1d4ed8';
+    case 'Mesh fixed':
+    case 'Wrapped':
+      return '#15803d';
+    default:
+      return '#6b7280';
+  }
+}
 
 const WATER_LOCATIONS = {
   tuludi: { name: 'Tuludi', coords: [-19.138159, 23.564946] },
@@ -83,7 +105,15 @@ export default function ConcessionMapPage() {
   // WaterExtentSlider (which needs map + L) would never mount without this.
   const [mapReady, setMapReady] = useState({ map: null, L: null });
 
-  const [toggles, setToggles] = useState({ roads: true, camps: true, poi: false, water: false, ndvi: false });
+  const [toggles, setToggles] = useState({
+    roads: true,
+    roadNames: false,
+    camps: true,
+    poi: false,
+    water: false,
+    ndvi: false,
+  });
+  const [showTreeStatus, setShowTreeStatus] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -209,13 +239,17 @@ export default function ConcessionMapPage() {
     allTrees.forEach((t) => {
       if (t.latitude == null || t.longitude == null) return;
       if (treeType && (t.species || '').toLowerCase() !== treeType.toLowerCase()) return;
-      const label = t.species || 'Unknown';
+      const label = showTreeStatus ? treeStatusOf(t) : t.species || 'Unknown';
       counts.set(label, (counts.get(label) || 0) + 1);
     });
     return Array.from(counts.entries())
-      .map(([label, count]) => ({ label, count, color: colorForLabel(label) }))
+      .map(([label, count]) => ({
+        label,
+        count,
+        color: showTreeStatus ? treeStatusColor(label) : colorForLabel(label),
+      }))
       .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-  }, [viewMode, allTrees, treeType]);
+  }, [viewMode, allTrees, treeType, showTreeStatus]);
 
   // Deep-link from reports: /map?view=sightings&id=…&lat=…&lng=…
   useEffect(() => {
@@ -263,7 +297,7 @@ export default function ConcessionMapPage() {
     if (!map) return;
     Object.entries(baseLayers).forEach(([key, layer]) => {
       if (!layer) return;
-      const shouldShow = toggles[key];
+      const shouldShow = key === 'roadNames' ? toggles.roads && toggles.roadNames : toggles[key];
       const has = map.hasLayer(layer);
       if (shouldShow && !has) map.addLayer(layer);
       if (!shouldShow && has) map.removeLayer(layer);
@@ -279,10 +313,11 @@ export default function ConcessionMapPage() {
     mapObj.current.L = L;
     setMapReady({ map, L });
     try {
-      const [boundary, camps, poi] = await Promise.all([
+      const [boundary, camps, poi, apiPois] = await Promise.all([
         fetchGeoJson('/data/geojson/Consession_boundary.geojson'),
         fetchGeoJson('/data/geojson/Camps.geojson'),
         fetchGeoJson('/data/geojson/KPR_POI.geojson').catch(() => null),
+        apiFetch('/api/pois').catch(() => ({ data: [] })),
       ]);
 
       const boundaryLayer = L.geoJSON(boundary, {
@@ -291,6 +326,7 @@ export default function ConcessionMapPage() {
 
       // Roads: same as phone — GeoJSON base + synced user roads (see loadRoadsDataset).
       mapObj.current.baseLayers.roads = L.layerGroup();
+      mapObj.current.baseLayers.roadNames = L.layerGroup();
       mapObj.current.userRoadsLayer = null;
 
       mapObj.current.baseLayers.camps = L.geoJSON(camps, {
@@ -329,15 +365,24 @@ export default function ConcessionMapPage() {
         });
       }
 
+      const poiGroup = L.layerGroup();
       if (poi) {
-        mapObj.current.baseLayers.poi = L.geoJSON(poi, {
+        L.geoJSON(poi, {
           pointToLayer: (feature, latlng) => L.marker(latlng, { icon: divIcon(L, 'poi') }),
           onEachFeature: (feature, layer) => {
             const name = feature.properties?.name || feature.properties?.['what it is'] || 'Point of interest';
             layer.bindPopup(`<strong>${escapeHtml(name)}</strong>`);
           },
-        });
+        }).addTo(poiGroup);
       }
+      (apiPois.data || []).forEach((p) => {
+        if (p.latitude == null || p.longitude == null) return;
+        const marker = L.marker([p.latitude, p.longitude], { icon: divIcon(L, 'poi') });
+        const extra = p.notes ? `<br>${escapeHtml(p.notes)}` : '';
+        marker.bindPopup(`<strong>${escapeHtml(p.name || 'Point of interest')}</strong>${extra}`);
+        poiGroup.addLayer(marker);
+      });
+      mapObj.current.baseLayers.poi = poiGroup;
 
       applyBaseVisibility();
 
@@ -367,8 +412,8 @@ export default function ConcessionMapPage() {
           const name = road.name || road.Roads || 'Road';
           const isUser = (road.source || '').toLowerCase() === 'user';
           const line = L.polyline(latlngs, {
-            color: isUser ? '#1565C0' : '#8a6d3b',
-            weight: isUser ? 2.5 : 1.5,
+            color: roadLineColor(road),
+            weight: roadLineWeight(road),
             opacity: isUser ? 0.9 : 0.8,
           });
           line.bindPopup(
@@ -377,6 +422,17 @@ export default function ConcessionMapPage() {
               `${road.user ? `<br>By: ${escapeHtml(road.user)}` : ''}`
           );
           mapObj.current.baseLayers.roads.addLayer(line);
+          if (name.trim()) {
+            const mid = roadMidpoint(latlngs);
+            if (mid) {
+              const label = L.marker(mid, {
+                icon: roadNameIcon(L, name),
+                interactive: false,
+                keyboard: false,
+              });
+              mapObj.current.baseLayers.roadNames.addLayer(label);
+            }
+          }
         });
       }
 
@@ -486,8 +542,9 @@ export default function ConcessionMapPage() {
           }
         } else {
           const markers = filtered.map((t) => {
-            const marker = L.marker([t.latitude, t.longitude], { icon: dotIcon(L, colorForLabel(t.species)) });
-            const status = t.wrappedHistory?.length ? t.wrappedHistory[t.wrappedHistory.length - 1].status : 'Unknown';
+            const status = treeStatusOf(t);
+            const color = showTreeStatus ? treeStatusColor(status) : colorForLabel(t.species);
+            const marker = L.marker([t.latitude, t.longitude], { icon: dotIcon(L, color) });
             marker.bindPopup(
               `<strong>${escapeHtml(t.species || 'Tree')}</strong><br>Status: ${escapeHtml(status)}<br>DBH readings: ${
                 t.dbhHistory?.length || 0
@@ -601,7 +658,7 @@ export default function ConcessionMapPage() {
     return () => {
       cancelled = true;
     };
-  }, [viewMode, dateStart, dateEnd, month, year, species, treeType, displayMode, showRecent, visibleObservations, allTrees, allTracking, fires, fireSensor, focusTarget, speciesIconMap, incidentIconMap]);
+  }, [viewMode, dateStart, dateEnd, month, year, species, treeType, displayMode, showRecent, showTreeStatus, visibleObservations, allTrees, allTracking, fires, fireSensor, focusTarget, speciesIconMap, incidentIconMap]);
 
   const loadFires = useCallback(async () => {
     setFiresLoading(true);
@@ -700,7 +757,9 @@ export default function ConcessionMapPage() {
           <LeafletMap onReady={handleReady} />
           {viewMode === 'sightings' && <DynamicMapLegend title="Species" items={visibleSpeciesLegend} />}
           {viewMode === 'incidents' && <DynamicMapLegend title="Incidents" items={visibleIncidentsLegend} />}
-          {viewMode === 'trees' && <DynamicMapLegend title="Trees" items={visibleTreesLegend} />}
+          {viewMode === 'trees' && (
+            <DynamicMapLegend title={showTreeStatus ? 'Tree status' : 'Trees'} items={visibleTreesLegend} />
+          )}
           {viewMode === 'vehicle' && displayMode !== 'hotspot' && (
             <DynamicMapLegend title="Vehicles" items={trackLegend} />
           )}
@@ -744,6 +803,8 @@ export default function ConcessionMapPage() {
           treeType={treeType}
           onTreeTypeChange={setTreeType}
           treeOptions={treeOptions}
+          showTreeStatus={showTreeStatus}
+          onShowTreeStatusChange={setShowTreeStatus}
           displayMode={displayMode}
           onDisplayModeChange={setDisplayMode}
           showRecent={showRecent}

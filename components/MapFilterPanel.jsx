@@ -73,6 +73,8 @@ export default function MapFilterPanel({
   treeType,
   onTreeTypeChange,
   treeOptions,
+  showTreeStatus,
+  onShowTreeStatusChange,
   displayMode,
   onDisplayModeChange,
   showRecent,
@@ -189,6 +191,18 @@ export default function MapFilterPanel({
               </option>
             ))}
           </select>
+          <label className="mt-3 flex items-center gap-2 text-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              className="accent-[var(--kpr-gold)]"
+              checked={!!showTreeStatus}
+              onChange={(e) => onShowTreeStatusChange?.(e.target.checked)}
+            />
+            <span>Show tree status</span>
+          </label>
+          <p className="text-[11px] text-portal-text-muted mt-1 leading-snug">
+            Colours match the field app: green wrapped / mesh fixed, blue to be wrapped, red mesh damaged.
+          </p>
         </div>
       )}
 
