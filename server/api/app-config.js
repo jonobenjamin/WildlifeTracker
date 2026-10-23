@@ -6,6 +6,7 @@ const { normalizeRole } = require('../lib/rbac');
 const {
   buildDefaultSpecies,
   buildDefaultIncidents,
+  DEFAULT_SEXES,
   SPECIES_COLLECTION,
   INCIDENTS_COLLECTION,
 } = require('../lib/appConfigDefaults');
@@ -35,23 +36,27 @@ function requireAdmin(req, res) {
   return true;
 }
 
-/** Portal roles that may read catalogs (map icons). Mutations stay admin-only. */
-function requirePortalReader(req, res) {
-  const role = normalizeRole(req.authRole);
-  if (!['admin', 'guide', 'researcher'].includes(role)) {
-    res.status(403).json({
-      success: false,
-      error: 'Forbidden',
-      message: 'Sign in required to read app configuration',
-    });
-    return false;
+  /** Any signed-in field/portal user may read catalogs (phones need survey lists). */
+  function requireAuthenticated(req, res) {
+    if (!req.authUid) {
+      res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+        message: 'Sign in required to read app configuration',
+      });
+      return false;
+    }
+    return true;
   }
-  return true;
-}
 
-function cleanStringList(value) {
+  function cleanStringList(value) {
   if (!Array.isArray(value)) return [];
   return value.map((v) => String(v || '').trim()).filter(Boolean);
+}
+
+function withDefaultSexes(row) {
+  if (!row || Array.isArray(row.sexes)) return row;
+  return { ...row, sexes: [...DEFAULT_SEXES] };
 }
 
 function slugify(name) {
@@ -135,7 +140,7 @@ module.exports = (db) => {
 
   router.get('/', async (req, res) => {
     try {
-      if (!requirePortalReader(req, res)) return;
+      if (!requireAuthenticated(req, res)) return;
       if (!db) return res.status(503).json({ success: false, error: 'Database not available' });
       // Seed once from defaults so the map has icons even before an admin visits App configuration.
       const seeded = await ensureSeeded(db);
@@ -143,7 +148,11 @@ module.exports = (db) => {
         listCollection(db, SPECIES_COLLECTION),
         listCollection(db, INCIDENTS_COLLECTION),
       ]);
-      res.json({ success: true, data: { species, incidents }, seeded });
+      res.json({
+        success: true,
+        data: { species: species.map(withDefaultSexes), incidents },
+        seeded,
+      });
     } catch (error) {
       console.error('GET /api/app-config error:', error);
       res.status(500).json({ success: false, error: error.message || 'Failed to load app config' });
@@ -188,6 +197,7 @@ module.exports = (db) => {
         profile,
         ageCategories: cleanStringList(req.body.ageCategories),
         activities: cleanStringList(req.body.activities),
+        sexes: cleanStringList(req.body.sexes),
         knownNames: cleanStringList(req.body.knownNames),
         iconUrl: req.body.iconUrl || null,
         iconPath: req.body.iconPath || null,
@@ -231,6 +241,7 @@ module.exports = (db) => {
       }
       if (req.body.ageCategories !== undefined) updates.ageCategories = cleanStringList(req.body.ageCategories);
       if (req.body.activities !== undefined) updates.activities = cleanStringList(req.body.activities);
+      if (req.body.sexes !== undefined) updates.sexes = cleanStringList(req.body.sexes);
       if (req.body.knownNames !== undefined) updates.knownNames = cleanStringList(req.body.knownNames);
       if (req.body.sortOrder !== undefined) updates.sortOrder = Number(req.body.sortOrder) || 0;
       if (req.body.active !== undefined) updates.active = !!req.body.active;

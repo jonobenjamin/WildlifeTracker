@@ -14,6 +14,7 @@ const DEFAULT_ACTIVITIES = [
 ];
 
 const DEFAULT_AGES = ['Baby', 'Juvenile', 'Adult', 'Mixed ages'];
+const DEFAULT_SEXES = ['Male', 'Female', 'Mixed'];
 const HYENA_AGES = ['Cub', 'Juvenile', 'Sub-Adult', 'Adult'];
 const CAT_AGES = ['Pup', 'Juvenile', 'Sub-adult', 'Adult'];
 const ELEPHANT_BUFFALO_AGES = [
@@ -87,6 +88,7 @@ function speciesEntry(name, taxa, sortOrder) {
     profile: HIGH_PROFILE.has(name) ? 'high' : 'general',
     ageCategories: agesFor(name),
     activities: [...DEFAULT_ACTIVITIES],
+    sexes: [...DEFAULT_SEXES],
     knownNames: knownNamesFor(name),
     iconUrl: ICON_BY_NAME[name] || null,
     iconPath: null,
@@ -170,6 +172,7 @@ function buildDefaultIncidents() {
 
 module.exports = {
   DEFAULT_ACTIVITIES,
+  DEFAULT_SEXES,
   buildDefaultSpecies,
   buildDefaultIncidents,
   SPECIES_COLLECTION: 'app_config_species',

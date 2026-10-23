@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { href: '/reports', label: 'Reporting', roles: ['admin'] },
   { href: '/vehicles', label: 'Vehicle Tracker', roles: ['admin'] },
   { href: '/profile', label: 'Profile', roles: ['admin', 'guide', 'researcher'] },
+  { href: '/download', label: 'Download app', roles: ['admin', 'guide', 'researcher'] },
 ];
 
 function initialsFromLabel(label) {

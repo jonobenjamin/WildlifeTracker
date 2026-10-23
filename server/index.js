@@ -143,6 +143,7 @@ app.use('/api/pois', require('./api/pois')(db));
 app.use('/api/okavango-water', require('./api/okavango-water'));
 app.use('/api/okavango-ndvi', require('./api/okavango-ndvi'));
 app.use('/api/app-config', require('./api/app-config')(db));
+app.use('/api/app-releases', require('./api/app-releases')(db));
 
 app.use((err, req, res, next) => {
   console.error(err.stack);

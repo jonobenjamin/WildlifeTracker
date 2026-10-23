@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { useAuth } from '@/lib/authContext';
 import { homePathForRole } from '@/lib/roles';
+import AndroidAppCard from '@/components/AndroidAppCard';
 
 const STEPS = { PASSWORD: 'password', FORGOT: 'forgot', PIN: 'pin' };
 
@@ -82,13 +83,14 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center p-6"
+      className="min-h-screen flex items-center justify-center p-6 py-10"
       style={{
         background:
           'linear-gradient(rgba(58,19,17,0.72), rgba(67,81,45,0.78)), url(/data/icons/KPR_icon.png) center/cover no-repeat',
       }}
     >
-      <div className="kpr-card w-full max-w-[420px] p-9">
+      <div className="w-full max-w-[420px]">
+      <div className="kpr-card w-full p-9">
         <div className="flex items-center gap-3.5 mb-2">
           <Image src="/data/icons/KPR.svg" alt="KPR" width={48} height={48} />
           <h1 className="text-xl font-bold" style={{ color: 'var(--kpr-burgundy)' }}>
@@ -239,6 +241,8 @@ export default function LoginPage() {
             {msg.text}
           </div>
         )}
+      </div>
+      <AndroidAppCard variant="login" />
       </div>
     </div>
   );

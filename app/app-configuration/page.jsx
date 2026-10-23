@@ -129,6 +129,7 @@ function emptySpeciesForm() {
     profile: 'general',
     ageCategories: [],
     activities: [],
+    sexes: ['Male', 'Female', 'Mixed'],
     knownNames: [],
   };
 }
@@ -369,6 +370,7 @@ export default function AppConfigurationPage() {
                     <th className="px-3 py-2.5 font-semibold">Taxa</th>
                     <th className="px-3 py-2.5 font-semibold">Profile</th>
                     <th className="px-3 py-2.5 font-semibold">Ages</th>
+                    <th className="px-3 py-2.5 font-semibold">Sexes</th>
                     <th className="px-3 py-2.5 font-semibold">Activities</th>
                     <th className="px-3 py-2.5 font-semibold">Names</th>
                     <th className="px-3 py-2.5 font-semibold" />
@@ -397,6 +399,7 @@ export default function AppConfigurationPage() {
                       <td className="px-3 py-2">{item.taxa}</td>
                       <td className="px-3 py-2 capitalize">{item.profile === 'high' ? 'High profile' : 'General'}</td>
                       <td className="px-3 py-2 text-xs text-portal-text-muted">{(item.ageCategories || []).length}</td>
+                      <td className="px-3 py-2 text-xs text-portal-text-muted">{(item.sexes || []).length}</td>
                       <td className="px-3 py-2 text-xs text-portal-text-muted">{(item.activities || []).length}</td>
                       <td className="px-3 py-2 text-xs text-portal-text-muted">{(item.knownNames || []).length}</td>
                       <td className="px-3 py-2 text-right whitespace-nowrap">
@@ -534,6 +537,7 @@ function SpeciesEditorModal({ item, busy, onClose, onSave }) {
           profile: item.profile === 'high' ? 'high' : 'general',
           ageCategories: [...(item.ageCategories || [])],
           activities: [...(item.activities || [])],
+          sexes: Array.isArray(item.sexes) ? [...item.sexes] : ['Male', 'Female', 'Mixed'],
           knownNames: [...(item.knownNames || [])],
         }
       : emptySpeciesForm()
@@ -559,6 +563,7 @@ function SpeciesEditorModal({ item, busy, onClose, onSave }) {
           scientificName: form.scientificName.trim(),
           ageCategories: form.ageCategories.map((v) => v.trim()).filter(Boolean),
           activities: form.activities.map((v) => v.trim()).filter(Boolean),
+          sexes: form.sexes.map((v) => v.trim()).filter(Boolean),
           knownNames: form.knownNames.map((v) => v.trim()).filter(Boolean),
         },
         item?.id
@@ -614,6 +619,12 @@ function SpeciesEditorModal({ item, busy, onClose, onSave }) {
             hint="e.g. Calf, then add Sub-adult, Adult…"
             values={form.ageCategories}
             onChange={(v) => setField('ageCategories', v)}
+          />
+          <StringListEditor
+            label="Sexes"
+            hint="e.g. Male, Female, Mixed. Leave empty to hide sex on the phone."
+            values={form.sexes}
+            onChange={(v) => setField('sexes', v)}
           />
           <StringListEditor
             label="Activity types"
